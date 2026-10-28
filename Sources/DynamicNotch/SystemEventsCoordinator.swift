@@ -75,7 +75,12 @@ final class SystemEventsCoordinator {
 
         // The event tap can be switched off by the system (timeouts, permission changes, wake): keep it alive.
         watchdog = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.interceptor.ensureEnabled() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.interceptor.ensureEnabled()
+                // The permission may have been revoked and given back: bring the tap up again without a prompt.
+                if self.settings.interceptSystemHUD, !self.interceptor.isRunning { self.installTapWhenTrusted(prompt: false) }
+            }
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.interceptor.ensureEnabled(); self?.refreshOutputs() }

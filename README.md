@@ -42,6 +42,13 @@ Dynamic Notch works without any of them; each one only switches on the matching 
 
 Nothing leaves your Mac. There are no analytics, and the only network access is looking up album artwork when it controls Music or Spotify through scripting (Spotify's artwork URL, Apple's public iTunes Search with the artist and title), plus whatever a plugin you approved asks for.
 
+## See it in motion
+
+<p align="center">
+  <a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><img src="docs/promo.gif" alt="Dynamic Notch in action" width="560"></a>
+</p>
+<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ Watch the full 52-second video</b></a> (1080p)</p>
+
 ## Features
 
 <table>
@@ -153,6 +160,7 @@ swift test               # 170+ unit tests: HTTP parser, API validation, notific
 python3 scripts/stress.py  # hostile traffic and 1400+ concurrent requests against a running app (enable the API first)
 swift scripts/make-icon.swift  # regenerates Resources/AppIcon.icns and docs/icon.png
 MARKETING_SNAPSHOT=docs swift test --filter MarketingSnapshotTests  # regenerates docs/hero.jpg and docs/features/*.jpg
+PROMO_DIR=/tmp/frames swift test --filter PromoVideoTests  # renders the promo video frames, see the header of Tests/DynamicNotchTests/PromoVideoTests.swift
 ```
 
 Code layout: `Sources/DynamicNotch` (the app), `Tests/DynamicNotchTests`, `Helper/` (the MediaRemote bridge), `Plugins/examples`.

@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Lets the promo video renderer drive every time-based animation from its own clock. Always nil in the app.
+enum ViewClock {
+    nonisolated(unsafe) static var override: Date?
+    static func date(_ live: Date) -> Date { override ?? live }
+}
+
 struct WaveformView: View {
     var isPlaying: Bool
     var color: Color
@@ -10,7 +16,7 @@ struct WaveformView: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !isPlaying)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
+            let t = ViewClock.date(ctx.date).timeIntervalSinceReferenceDate
             HStack(alignment: .center, spacing: spacing) {
                 ForEach(0..<bars, id: \.self) { i in
                     let phase = Double(i) * 1.9

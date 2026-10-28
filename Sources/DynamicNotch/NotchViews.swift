@@ -284,7 +284,7 @@ struct ProgressRow: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.25, paused: !active)) { ctx in
             let duration = model.media?.duration ?? 0
-            let position = model.media?.currentPosition(at: ctx.date) ?? 0
+            let position = model.media?.currentPosition(at: ViewClock.date(ctx.date)) ?? 0
             let fraction = dragFraction ?? (duration > 0 ? position / duration : 0)
             HStack(spacing: 10) {
                 Text(formatTime(dragFraction.map { $0 * duration } ?? position))
@@ -531,13 +531,13 @@ struct ActivityTrailing: View {
     var body: some View {
         if activity.countsUp {
             TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
-                Text(formatTime(ctx.date.timeIntervalSince(activity.startDate)))
+                Text(formatTime(ViewClock.date(ctx.date).timeIntervalSince(activity.startDate)))
                     .font(.system(size: 10, weight: .medium).monospacedDigit())
                     .foregroundStyle(.white)
             }
         } else if activity.isTimer {
             TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
-                Text(formatTime(activity.remaining(at: ctx.date).rounded(.up)))
+                Text(formatTime(activity.remaining(at: ViewClock.date(ctx.date)).rounded(.up)))
                     .font(.system(size: 10, weight: .medium).monospacedDigit())
                     .foregroundStyle(.white)
             }
@@ -552,7 +552,7 @@ struct ActivityTrailing: View {
             .animation(.easeOut(duration: 0.3), value: level)
         } else {
             TimelineView(.animation(minimumInterval: 1.0 / 20)) { ctx in
-                let pulse = 0.55 + 0.45 * sin(ctx.date.timeIntervalSinceReferenceDate * 3)
+                let pulse = 0.55 + 0.45 * sin(ViewClock.date(ctx.date).timeIntervalSinceReferenceDate * 3)
                 Circle().fill(activity.tint.flatMap(Color.init(hex:)) ?? .white)
                     .frame(width: 6, height: 6).opacity(pulse)
             }
@@ -896,7 +896,7 @@ struct BatteryCapsule: View {
     var body: some View {
         if pulsing {
             TimelineView(.animation(minimumInterval: 1.0 / 30)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate / period
+                let t = ViewClock.date(ctx.date).timeIntervalSinceReferenceDate / period
                 // Two ripples half a cycle apart keep the motion continuous.
                 BatteryCapsuleBody(percent: percent, tint: tint, charging: charging,
                                    ripples: [t.truncatingRemainder(dividingBy: 1), (t + 0.5).truncatingRemainder(dividingBy: 1)])
@@ -1059,7 +1059,7 @@ struct FocusFeature: View {
 struct RecordingDot: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 24)) { ctx in
-            let pulse = 0.5 + 0.5 * sin(ctx.date.timeIntervalSinceReferenceDate * 3.2)
+            let pulse = 0.5 + 0.5 * sin(ViewClock.date(ctx.date).timeIntervalSinceReferenceDate * 3.2)
             ZStack {
                 Circle().fill(Color(red: 1, green: 0.27, blue: 0.23).opacity(0.25 * pulse)).scaleEffect(1.9)
                 Circle().fill(Color(red: 1, green: 0.27, blue: 0.23))

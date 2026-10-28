@@ -28,6 +28,13 @@ Music/Spotify AppleScript kullanılırsa ayrıca Otomasyon izni sorulur. Hiçbir
 
 Verilerin Mac'inden çıkmaz, analitik yoktur. Tek ağ erişimi, Music/Spotify betik kipinde albüm kapağı aramasıdır (Spotify'ın kapak adresi, Apple'ın herkese açık iTunes Search servisi; sanatçı ve şarkı adı gider) ve onayladığın eklentilerin istekleridir.
 
+## Hareket halinde
+
+<p align="center">
+  <a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><img src="docs/promo.gif" alt="Dynamic Notch çalışırken" width="560"></a>
+</p>
+<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ 52 saniyelik videonun tamamını izle</b></a> (1080p)</p>
+
 ## Özellikler
 
 <table>
