@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Synthesises the promo video's soundtrack from scratch, so it is original and free of any licence.
+"""Composes and synthesises the promo film's soundtrack from scratch, so it is original and free of any licence.
 
-    python3 scripts/make-promo-audio.py <frames-dir>/timeline.json docs/promo-audio.wav
+    python3 scripts/make-promo-audio.py <frames-dir>/timeline.json out.wav
 
-Everything is generated with numpy: a warm pad, a soft pulse, a plucked arpeggio, UI sound design locked to the video's
-scene changes (read from timeline.json, written by PromoVideoTests), a bell chime on the Touch ID check, and a shared reverb.
-Needs numpy and scipy.
+An upbeat 120 BPM pop track in D major (Bm - G - D - A) built to the film's cut list (timeline.json, written by
+PromoVideoTests): a filtered build-up into a drop on the first cut, a driving verse, a full chorus, a breakdown under
+Touch ID with a bell on the check, a bigger final chorus under the montage and a closing hit. Drums, bass, supersaw
+chords and the lead are all synthesised with numpy; needs numpy and scipy.
 """
 import json
 import sys
@@ -15,222 +16,392 @@ import numpy as np
 from scipy.signal import butter, fftconvolve, sosfilt
 
 SR = 44100
-rng = np.random.default_rng(7)
+rng = np.random.default_rng(11)
 
+
+# ---------------------------------------------------------------- building blocks
 
 def midi(n):
     return 440.0 * 2 ** ((n - 69) / 12)
 
 
 def tt(duration):
-    return np.arange(int(duration * SR)) / SR
+    return np.arange(max(1, int(duration * SR))) / SR
 
 
-def lowpass(x, hz, order=2):
-    return sosfilt(butter(order, hz, btype="low", fs=SR, output="sos"), x, axis=0)
-
-
-def highpass(x, hz, order=2):
-    return sosfilt(butter(order, hz, btype="high", fs=SR, output="sos"), x, axis=0)
-
-
-def bandpass(x, lo, hi, order=2):
-    return sosfilt(butter(order, [lo, hi], btype="band", fs=SR, output="sos"), x, axis=0)
+def filt(x, kind, hz, order=2):
+    return sosfilt(butter(order, hz, btype=kind, fs=SR, output="sos"), x, axis=0)
 
 
 def stereo(mono, pan=0.0):
-    """pan -1 (left) ... 1 (right), equal power."""
     angle = (pan + 1) * np.pi / 4
     return np.stack([mono * np.cos(angle), mono * np.sin(angle)], axis=1)
 
 
 def add(buf, at, sig):
-    start = int(at * SR)
-    if start >= len(buf):
+    start = int(round(at * SR))
+    if start >= len(buf) or start + len(sig) <= 0:
         return
+    if start < 0:
+        sig, start = sig[-start:], 0
     end = min(len(buf), start + len(sig))
     buf[start:end] += sig[: end - start]
 
 
-def adsr(n, attack, release):
-    env = np.ones(n)
-    a, r = max(1, int(attack * SR)), max(1, int(release * SR))
-    env[:a] = np.linspace(0, 1, a) ** 2
-    env[-r:] *= np.linspace(1, 0, r) ** 2
-    return env
+def env_adsr(n, a, d, s, r):
+    e = np.full(n, s, dtype=float)
+    ia, idd, ir = max(1, int(a * SR)), max(1, int(d * SR)), max(1, int(r * SR))
+    e[:ia] = np.linspace(0, 1, ia)
+    e[ia:ia + idd] = np.linspace(1, s, len(e[ia:ia + idd]))
+    e[-ir:] *= np.linspace(1, 0, ir)
+    return e
 
+
+def saw(f, t, phase=0.0):
+    """Band-limited sawtooth (polyBLEP)."""
+    dt = f / SR
+    p = (f * t + phase) % 1.0
+    y = 2 * p - 1
+    m = p < dt
+    x = p[m] / dt
+    y[m] -= x + x - x * x - 1
+    m = p > 1 - dt
+    x = (p[m] - 1) / dt
+    y[m] -= x * x + x + x + 1
+    return y
+
+
+def supersaw(f, t, voices=5, spread=0.012):
+    out = np.zeros(len(t))
+    for i in range(voices):
+        detune = 1 + spread * (i - (voices - 1) / 2) / ((voices - 1) / 2)
+        out += saw(f * detune, t, phase=rng.random())
+    return out / voices
+
+
+# ---------------------------------------------------------------- the song
 
 def main(timeline_path, out_path):
-    timeline = json.load(open(timeline_path))
-    total = timeline["total"]
-    starts = timeline["starts"]
-    touch = timeline["touchStart"]
-    n = int((total + 2.5) * SR)
-
-    pad_bus = np.zeros((n, 2)); pluck_bus = np.zeros((n, 2)); ui_bus = np.zeros((n, 2)); dry = np.zeros((n, 2))
-
-    bpm = 96.0
-    beat = 60.0 / bpm
+    tl = json.load(open(timeline_path))
+    total = tl["total"]
+    beat = 60.0 / tl["bpm"]
     bar = 4 * beat
-    music_start = starts[1]                                   # the first feature scene
-    outro = starts[-1]
-    # Cmaj9 - Am9 - Fmaj9 - G6/9, two bars each.
-    chords = [[48, 52, 55, 59, 62], [45, 48, 52, 55, 59], [41, 45, 48, 52, 55], [43, 47, 50, 52, 57]]
-    roots = [36, 33, 29, 31]
-    chord_len = 2 * bar
+    drop = tl["starts"][1]                 # first feature shot: the drop
+    touch = tl["touchStart"]
+    check = tl["touchCheck"]
+    montage = tl["montageStart"]
+    outro = tl["outroStart"]
+    chorus = drop + 8 * bar                # bar 11
+    n = int((total + 3.0) * SR)
 
-    # ---- Pad: slow, warm, slightly detuned between the channels.
-    def pad_note(f, duration, level):
-        t = tt(duration)
-        env = adsr(len(t), 1.4, 1.8) * level
-        out = np.zeros((len(t), 2))
-        for ch, detune in enumerate((1.0035, 0.9965)):
-            ph = 2 * np.pi * f * detune * t
-            out[:, ch] = (np.sin(ph) + 0.45 * np.sin(2 * ph) + 0.22 * np.sin(3 * ph) + 0.08 * np.sin(4 * ph)) * env
-        return out
+    drums = np.zeros((n, 2)); bass = np.zeros((n, 2)); chords = np.zeros((n, 2))
+    lead = np.zeros((n, 2)); fx = np.zeros((n, 2)); keys = np.zeros((n, 2))
 
-    def pad_chord(at, notes, duration, level):
-        for note in notes:
-            add(pad_bus, at, pad_note(midi(note + 12), duration, level))
+    # Sections (bars measured from 0).
+    def in_range(t, a, b):
+        return a <= t < b
 
-    pad_chord(0.4, chords[0], music_start + 1.0, 0.045)                           # intro swell
-    t0 = music_start
-    k = 0
-    while t0 < outro + 1.0:
-        pad_chord(t0 - 0.2, chords[k % 4], chord_len + 1.6, 0.075)
-        t0 += chord_len
-        k += 1
-    pad_chord(outro - 0.2, chords[0], total - outro + 2.4, 0.085)                 # resolve on Cmaj9
-    pad_bus = lowpass(pad_bus, 2600)
+    verse = (drop, chorus)
+    chorus1 = (chorus, touch)
+    breakdown = (touch, montage)
+    final = (montage, outro)
 
-    # ---- Sub bass: one long note per chord.
-    bass = np.zeros((n, 2))
-    t0, k = music_start, 0
-    while t0 < outro:
-        t = tt(chord_len + 0.3)
-        f = midi(roots[k % 4])
-        sig = (np.sin(2 * np.pi * f * t) + 0.25 * np.sin(4 * np.pi * f * t)) * adsr(len(t), 0.05, 0.5) * 0.30
-        add(bass, t0, stereo(sig))
-        t0 += chord_len
-        k += 1
-    t = tt(total - outro + 2.4)
-    add(bass, outro, stereo(np.sin(2 * np.pi * midi(36) * t) * adsr(len(t), 0.3, 2.2) * 0.26))
+    prog = [  # Bm - G - D - A
+        dict(root=35, triad=[59, 62, 66], lead_low=47),
+        dict(root=31, triad=[55, 59, 62], lead_low=43),
+        dict(root=38, triad=[57, 62, 66], lead_low=50),
+        dict(root=33, triad=[57, 61, 64], lead_low=45),
+    ]
 
-    # ---- Arpeggio: plucked eighth notes through the chord tones.
-    def pluck(f, level):
-        t = tt(1.4)
-        sig = (np.sin(2 * np.pi * f * t) * np.exp(-t * 5.5) + 0.38 * np.sin(4 * np.pi * f * t) * np.exp(-t * 9)
-               + 0.14 * np.sin(6 * np.pi * f * t) * np.exp(-t * 13))
-        sig *= np.minimum(1, t / 0.004) * level
-        return sig
+    def chord_at(t):
+        return prog[int(max(0, t) // bar) % 4]
 
-    pattern = [0, 2, 4, 2, 3, 1, 4, 2]
-    eighth = beat / 2
-    step, t0 = 0, music_start
-    while t0 < outro - 0.5:
-        chord = sorted(chords[int((t0 - music_start) // chord_len) % 4])
-        idx = pattern[step % 8]
-        accent = 1.0 if step % 4 == 0 else 0.72
-        fade_in = min(1.0, 0.35 + (t0 - music_start) / 14.0)
-        note = chord[idx] + 24
-        add(pluck_bus, t0, stereo(pluck(midi(note), 0.075 * accent * fade_in), pan=-0.35 if step % 2 == 0 else 0.35))
-        t0 += eighth
-        step += 1
-    # A slow shimmer on the closing card.
-    for i, note in enumerate([84, 88, 91, 95, 98]):
-        t = tt(2.6)
-        sig = np.sin(2 * np.pi * midi(note) * t) * np.exp(-t * 1.7) * 0.03 * np.minimum(1, t / 0.01)
-        add(pluck_bus, outro + 1.3 + i * 0.16, stereo(sig, pan=-0.5 + 0.25 * i))
+    # ---------------- drums
+    kick_times = []
 
-    # ---- Pulse and air: a soft kick on the beat and light hats, only through the middle of the film.
-    pulse_start, pulse_end = starts[3], outro - 0.2
-    t0 = pulse_start
-    while t0 < pulse_end:
-        t = tt(0.4)
-        sig = np.sin(2 * np.pi * np.cumsum(48 + 70 * np.exp(-t * 30)) / SR) * np.exp(-t * 8.5) * 0.30
-        add(dry, t0, stereo(sig))
+    def kick(at, level=1.0):
+        t = tt(0.45)
+        freq = 46 + 110 * np.exp(-t * 32)
+        body = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 7.5)
+        click = filt(rng.standard_normal(len(t)), "high", 2500) * np.exp(-t * 300) * 0.35
+        sig = np.tanh((body + click) * 1.6) * 0.62 * level
+        add(drums, at, stereo(sig))
+        kick_times.append(at)
+
+    def snare(at, level=1.0):
+        t = tt(0.32)
+        noise = filt(rng.standard_normal(len(t)), "band", [1400, 9000]) * np.exp(-t * 16)
+        body = np.sin(2 * np.pi * 185 * t) * np.exp(-t * 28) * 0.8
+        sig = (noise * 0.55 + body * 0.5) * level * 0.5
+        add(drums, at, stereo(sig, pan=0.04))
+
+    def clap(at, level=1.0):
+        t = tt(0.3)
+        n0 = filt(rng.standard_normal(len(t)), "band", [900, 6500])
+        e = np.zeros(len(t))
+        for k, off in enumerate((0.0, 0.011, 0.022)):
+            i = int(off * SR)
+            e[i:] += np.exp(-(t[: len(t) - i]) * (90 if k < 2 else 18))
+        add(drums, at, stereo(n0 * e * 0.22 * level, pan=-0.05))
+
+    def hat(at, level=1.0, open_=False, pan=0.25):
+        t = tt(0.4 if open_ else 0.07)
+        sig = filt(rng.standard_normal(len(t)), "high", 7500) * np.exp(-t * (7 if open_ else 65)) * 0.13 * level
+        add(drums, at, stereo(sig, pan=pan))
+
+    def crash(at, level=1.0):
+        t = tt(2.4)
+        sig = filt(rng.standard_normal((len(t), 2)), "high", 4500) * np.exp(-t * 1.6)[:, None] * 0.16 * level
+        add(drums, at, sig)
+
+    def snare_roll(start, end, level=1.0):
+        t = start
+        step = beat / 4
+        while t < end - 1e-6:
+            prog_ = (t - start) / (end - start)
+            if prog_ > 0.5:
+                step = beat / 8 if prog_ > 0.8 else beat / 4
+            snare(t, level * (0.25 + 0.75 * prog_))
+            t += step
+
+    # Intro: a pulse that gathers, then a roll into the drop.
+    for i in range(int(drop / beat)):
+        t0 = i * beat
+        if t0 >= drop - bar:
+            hat(t0, 0.5 + 0.5 * (t0 / drop))
+    snare_roll(drop - bar, drop, 0.75)
+
+    t0 = drop
+    while t0 < outro - 1e-6:
+        b = int(round((t0 - drop) / beat)) % 4
+        in_break = in_range(t0, *breakdown)
+        in_final = in_range(t0, *final)
+        in_chorus = in_range(t0, *chorus1) or in_final
+        if not in_break:
+            if in_final or in_chorus:
+                kick(t0)                                       # four on the floor in the choruses
+            elif b in (0, 2) or (b == 3 and (t0 - drop) % (2 * bar) > bar):
+                kick(t0)
+            if b in (1, 3):
+                snare(t0, 1.0)
+                if in_chorus:
+                    clap(t0)
+            hat(t0 + beat / 2, 0.9 if in_chorus else 0.7, open_=in_chorus and b % 2 == 1)
+            hat(t0, 0.45, pan=-0.2)
+            if in_final:
+                hat(t0 + beat / 4, 0.35, pan=0.4)
+                hat(t0 + 3 * beat / 4, 0.35, pan=0.4)
         t0 += beat
-    t0 = pulse_start + eighth
-    while t0 < pulse_end:
-        t = tt(0.07)
-        noise = highpass(rng.standard_normal(len(t)), 7000) * np.exp(-t * 70) * 0.045
-        add(dry, t0, stereo(noise, pan=0.2))
+
+    # Breakdown: a heartbeat kick returns halfway and a roll pulls into the montage.
+    t0 = touch + 4 * beat
+    while t0 < montage - bar:
+        kick(t0, 0.55)
         t0 += beat
+    snare_roll(montage - bar, montage, 0.9)
+    for at in (drop, chorus, montage, montage + 2 * bar, outro):
+        crash(at, 1.0)
+    # A hit on every montage cut.
+    for i in range(8):
+        clap(montage + i * bar / 2, 0.6)
 
-    # ---- Intro: a rising wash into a soft impact as the film opens up.
-    rise_start, rise_end = 1.3, starts[1] - 0.05
-    t = tt(rise_end - rise_start)
-    ramp = (t / t[-1]) ** 2.2
-    wash = bandpass(rng.standard_normal(len(t)), 600, 9000) * ramp * 0.16
-    sweep_phase = 2 * np.pi * np.cumsum(180 * (1 + 7 * (t / t[-1]) ** 2)) / SR
-    wash += np.sin(sweep_phase) * ramp * 0.05
-    add(ui_bus, rise_start, stereo(wash))
-    t = tt(2.2)
-    thump = np.sin(2 * np.pi * np.cumsum(38 + 40 * np.exp(-t * 14)) / SR) * np.exp(-t * 2.4) * 0.55
-    boom = lowpass(rng.standard_normal(len(t)), 900) * np.exp(-t * 3.2) * 0.18
-    add(dry, starts[1] - 0.02, stereo(thump + boom))
+    # Closing hit.
+    kick(outro, 1.2)
+    t = tt(3.5)
+    sub = np.sin(2 * np.pi * np.cumsum(32 + 45 * np.exp(-t * 6)) / SR) * np.exp(-t * 1.1) * 0.5
+    add(drums, outro, stereo(sub))
 
-    # ---- UI sound design locked to the scene changes.
-    def pop(f0, f1, level):
-        t = tt(0.22)
-        freq = f0 * (f1 / f0) ** np.minimum(1, t / 0.1)
-        sig = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 17) * np.minimum(1, t / 0.004) * level
-        return sig
+    # ---------------- sidechain envelope from every kick
+    duck = np.ones(n)
+    for k in kick_times:
+        i = int(k * SR)
+        span = min(n - i, int(0.32 * SR))
+        if span <= 0:
+            continue
+        curve = 1 - 0.72 * np.exp(-np.arange(span) / (0.085 * SR))
+        duck[i:i + span] = np.minimum(duck[i:i + span], curve)
 
-    def whoosh(duration, level):
-        t = tt(duration)
-        env = np.sin(np.pi * np.minimum(1, t / duration)) ** 2
-        return bandpass(rng.standard_normal(len(t)), 700, 6500) * env * level
-
-    for i, s in enumerate(starts[1:-1], start=1):
-        add(ui_bus, s, stereo(pop(520 + 40 * (i % 3), 820 + 60 * (i % 4), 0.10), pan=(-0.2, 0.2)[i % 2]))
-        add(ui_bus, s + 0.04, stereo(whoosh(0.55, 0.05)))
-
-    # Touch ID: rings spin up, then a two-note bell as the check is drawn.
-    add(ui_bus, touch + 1.85, stereo(whoosh(0.9, 0.09)))
-    rise = tt(0.9)
-    add(ui_bus, touch + 1.85, stereo(np.sin(2 * np.pi * np.cumsum(300 + 900 * (rise / 0.9) ** 2) / SR) * np.sin(np.pi * rise / 0.9) ** 2 * 0.04))
-
-    def bell(f, level, length=2.4):
+    # ---------------- bass: driving eighths with an octave bounce
+    def bass_note(at, note, length, level=1.0):
         t = tt(length)
-        sig = (np.sin(2 * np.pi * f * t) * np.exp(-t * 2.4) + 0.45 * np.sin(2 * np.pi * f * 2.756 * t) * np.exp(-t * 4.2)
-               + 0.2 * np.sin(2 * np.pi * f * 5.404 * t) * np.exp(-t * 7)) * np.minimum(1, t / 0.003) * level
-        return sig
+        f = midi(note)
+        sig = filt(saw(f, t), "low", 950) * 0.55 + np.sin(2 * np.pi * f * t) * 0.6
+        sig *= env_adsr(len(t), 0.004, 0.08, 0.75, 0.03) * 0.42 * level
+        add(bass, at, stereo(sig))
 
-    add(ui_bus, touch + 2.82, stereo(bell(midi(88), 0.11), pan=-0.1))
-    add(ui_bus, touch + 2.95, stereo(bell(midi(95), 0.09), pan=0.15))
+    t0 = drop
+    while t0 < outro - 1e-6:
+        if in_range(t0, *breakdown):
+            if t0 >= montage - 2 * bar:
+                bass_note(t0, chord_at(t0)["root"], beat * 0.9, 0.7)
+            t0 += beat
+            continue
+        c = chord_at(t0)
+        step = int(round((t0 - drop) / (beat / 2))) % 8
+        note = c["root"] + (12 if step in (3, 7) else 0)
+        bass_note(t0, note, beat / 2 * 0.92, 1.0 if step % 2 == 0 else 0.82)
+        t0 += beat / 2
+    bass_note(outro, 38, 3.2, 1.2)
 
-    # ---- Reverb: a dark, wide room shared by the pad, plucks and UI sounds.
-    ir_t = tt(2.6)
-    ir = np.stack([rng.standard_normal(len(ir_t)), rng.standard_normal(len(ir_t))], axis=1) * np.exp(-ir_t * 2.1)[:, None]
-    ir = lowpass(ir, 5200)
-    ir[: int(0.012 * SR)] *= np.linspace(0, 1, int(0.012 * SR))[:, None]
+    # ---------------- chords: supersaw, pumping with the kick
+    def chord_block(at, length, notes, cutoff, level):
+        t = tt(length)
+        sig = np.zeros(len(t))
+        for note in notes:
+            sig += supersaw(midi(note), t, voices=5, spread=0.014)
+        sig = filt(sig, "low", cutoff)
+        sig *= env_adsr(len(t), 0.02, 0.2, 0.85, 0.12) * level
+        width = np.stack([sig, np.roll(sig, int(0.012 * SR))], axis=1)    # Haas widening
+        add(chords, at, width)
+
+    # Intro: the progression under a filter that opens towards the drop.
+    for i in range(int(drop / bar)):
+        at = i * bar
+        c = chord_at(at)
+        cutoff = 500 + 1600 * (at / drop)
+        chord_block(at, bar, c["triad"] + [c["triad"][0] - 12], cutoff, 0.16)
+    t0 = drop
+    while t0 < outro - 1e-6:
+        c = chord_at(t0)
+        if in_range(t0, *verse):
+            for s in range(8):                       # off-beat stabs
+                if s % 2 == 1:
+                    chord_block(t0 + s * beat / 2, beat / 2 * 0.8, c["triad"], 2600, 0.15)
+        elif in_range(t0, *breakdown):
+            chord_block(t0, bar, c["triad"] + [c["triad"][0] - 12], 1100, 0.12)
+        else:
+            bright = 5200 if in_range(t0, *final) else 4200
+            chord_block(t0, bar, c["triad"] + [c["triad"][0] + 12, c["triad"][0] - 12], bright, 0.17)
+        t0 += bar
+    chord_block(outro, 4.5, [62, 66, 69, 74, 50], 4800, 0.2)                 # D major, held
+
+    # ---------------- lead hook (original)
+    phrase_a = [(0.0, 78, .5), (.5, 81, .5), (1.0, 83, .75), (1.75, 81, .5), (2.5, 78, .5), (3.0, 76, .5), (3.5, 74, .5),
+                (4.5, 76, .5), (5.0, 78, .5), (5.5, 81, 1.0), (6.5, 78, .5), (7.0, 76, 1.0)]
+    phrase_b = [(0.0, 81, .5), (.5, 83, .5), (1.0, 86, 1.0), (2.0, 83, .5), (2.5, 81, .5), (3.0, 78, .5), (3.5, 81, .5),
+                (4.5, 83, .5), (5.0, 81, .5), (5.5, 78, .75), (6.5, 76, .5), (7.0, 74, 1.0)]
+
+    def lead_note(at, note, length, level):
+        t = tt(length * beat + 0.12)
+        f = midi(note)
+        vib = 1 + 0.004 * np.sin(2 * np.pi * 5.5 * t) * np.clip((t - 0.18) / 0.2, 0, 1)
+        ph_t = np.cumsum(vib) / SR
+        sig = (supersaw(f, ph_t, voices=3, spread=0.008) * 0.7 + np.sign(np.sin(2 * np.pi * f / 2 * ph_t)) * 0.12)
+        sig = filt(sig, "low", 5200)
+        sig *= env_adsr(len(t), 0.006, 0.18, 0.7, 0.1) * level
+        add(lead, at, stereo(sig, pan=0.0))
+
+    def play_hook(start, end, octave=0, level=0.2):
+        t0 = start
+        k = 0
+        while t0 < end - 1e-6:
+            for at, note, length in (phrase_a if k % 2 == 0 else phrase_b):
+                if t0 + at * beat < end:
+                    lead_note(t0 + at * beat, note + octave, length, level)
+            t0 += 2 * bar
+            k += 1
+
+    play_hook(drop + 4 * bar, chorus, level=0.12)            # a taste in the second half of the verse
+    play_hook(chorus, touch, level=0.2)                      # chorus
+    play_hook(montage, outro, octave=12, level=0.17)          # the montage, an octave up
+    play_hook(montage, outro, octave=0, level=0.1)            # doubled underneath
+
+    # Ping-pong delay on the lead (dotted eighth).
+    d = int(0.75 * beat * SR)
+    echo = np.zeros_like(lead)
+    src = lead.copy()
+    for k in range(1, 5):
+        g = 0.36 ** k
+        shifted = np.zeros_like(lead)
+        shifted[d * k:] = src[: n - d * k] * g
+        if k % 2 == 1:
+            shifted = shifted[:, ::-1]
+        echo += shifted
+    lead += filt(echo, "low", 4000)
+
+    # ---------------- breakdown keys + the bell on the check
+    def pluck(at, note, level, length=1.6):
+        t = tt(length)
+        f = midi(note)
+        sig = (np.sin(2 * np.pi * f * t) * np.exp(-t * 4.5) + 0.35 * np.sin(4 * np.pi * f * t) * np.exp(-t * 8)
+               + 0.12 * np.sin(6 * np.pi * f * t) * np.exp(-t * 12)) * np.minimum(1, t / 0.003) * level
+        add(keys, at, stereo(sig, pan=0.3 if note % 2 else -0.3))
+
+    arp = [0, 1, 2, 1, 2, 0, 1, 2]
+    t0, s = touch, 0
+    while t0 < montage - 1e-6:
+        c = chord_at(t0)
+        pluck(t0, c["triad"][arp[s % 8]] + 12, 0.1)
+        t0 += beat / 2
+        s += 1
+
+    def bell(at, note, level):
+        t = tt(2.8)
+        f = midi(note)
+        sig = (np.sin(2 * np.pi * f * t) * np.exp(-t * 2.2) + 0.5 * np.sin(2 * np.pi * f * 2.756 * t) * np.exp(-t * 3.8)
+               + 0.22 * np.sin(2 * np.pi * f * 5.404 * t) * np.exp(-t * 6.5)) * np.minimum(1, t / 0.002) * level
+        add(fx, at, stereo(sig))
+
+    bell(check, 90, 0.16)                # F#6
+    bell(check + beat / 2, 93, 0.13)     # A6
+    bell(check + beat, 98, 0.1)          # D7
+
+    # ---------------- risers, impacts, reverse swells
+    def riser(start, end, level):
+        t = tt(end - start)
+        ramp = (t / t[-1]) ** 2.4
+        noise = filt(rng.standard_normal(len(t)), "band", [500, 11000]) * ramp
+        tone = np.sin(2 * np.pi * np.cumsum(220 * (1 + 6 * (t / t[-1]) ** 2)) / SR) * ramp * 0.25
+        add(fx, start, stereo((noise * 0.6 + tone) * level))
+
+    def impact(at, level):
+        t = tt(2.5)
+        boom = np.sin(2 * np.pi * np.cumsum(30 + 55 * np.exp(-t * 9)) / SR) * np.exp(-t * 2.0)
+        air = filt(rng.standard_normal(len(t)), "low", 1400) * np.exp(-t * 3.0) * 0.4
+        add(fx, at, stereo((boom + air) * level))
+
+    riser(0.6, drop, 0.16)
+    impact(drop, 0.55)
+    riser(montage - 2 * bar, montage, 0.18)
+    impact(montage, 0.5)
+    impact(outro, 0.6)
+
+    # ---------------- space
+    ir_t = tt(2.4)
+    ir = rng.standard_normal((len(ir_t), 2)) * np.exp(-ir_t * 2.6)[:, None]
+    ir = filt(ir, "low", 6000)
+    ir[: int(0.015 * SR)] *= np.linspace(0, 1, int(0.015 * SR))[:, None]
     ir /= np.sqrt((ir ** 2).sum())
 
-    def reverb(bus):
-        return np.stack([fftconvolve(bus[:, c], ir[:, c])[: len(bus)] for c in range(2)], axis=1)
+    def verb(x):
+        return np.stack([fftconvolve(x[:, c], ir[:, c])[:n] for c in range(2)], axis=1)
 
-    wet = reverb(pad_bus * 0.9 + pluck_bus * 1.0 + ui_bus * 0.9)
-    mix = pad_bus + bass + pluck_bus + ui_bus + dry + wet * 0.55
+    # Chords leave the low end to the bass and kick.
+    chords_d = filt(chords, "high", 170) * duck[:, None]
+    bass_d = bass * (0.35 + 0.65 * duck)[:, None]
+    send = chords_d * 0.35 + lead * 0.5 + keys * 0.8 + fx * 0.5 + drums * 0.08
+    mix = drums * 1.0 + bass_d * 1.0 + chords_d * 0.9 + lead * 0.95 + keys + fx + verb(send) * 0.45
 
-    # ---- Master: soft clip, normalise, fade.
-    mix = np.tanh(mix * 1.0)
-    mix = highpass(mix, 28)
-    # A level curve gives the film its arc: quiet open, a build, the full groove through the middle, a soft landing.
+    # ---------------- master: gentle glue compression, then a soft limiter
+    mix = filt(mix, "high", 25)
+    level = np.sqrt(np.maximum(filt(mix.mean(axis=1) ** 2, "low", 8), 0))
+    level = np.maximum(level, 1e-6)
+    thresh = np.percentile(level, 70)
+    gain = np.where(level > thresh, (thresh / level) ** (1 - 1 / 2.5), 1.0)
+    mix *= gain[:, None]
+    mix /= np.abs(mix).max()
+    mix = np.tanh(mix * 1.6) / np.tanh(1.6)
+
     seconds = np.arange(n) / SR
-    anchors = [(0.0, 0.40), (rise_end, 0.70), (starts[1] + 0.3, 0.62), (starts[3], 0.92), (outro - 0.5, 0.95),
-               (outro + 1.5, 0.70), (total + 1.8, 0.0)]
-    mix *= np.interp(seconds, [x for x, _ in anchors], [y for _, y in anchors])[:, None]
-    fade_in = np.minimum(1, np.arange(n) / (0.5 * SR))
-    fade_out = np.clip((total + 1.8 - np.arange(n) / SR) / 3.2, 0, 1) ** 1.5
-    mix *= (fade_in * fade_out)[:, None]
-    mix /= max(1e-9, np.abs(mix).max()) / 0.7
-    pcm = (mix[: int((total + 0.2) * SR)] * 32767).astype("<i2")
+    fade = np.clip((total + 0.4 - seconds) / 2.2, 0, 1) ** 1.3
+    fade *= np.clip(seconds / 0.05, 0, 1)
+    mix *= fade[:, None]
+    mix *= 0.93 / np.abs(mix).max()
+    pcm = (mix[: int((total + 0.3) * SR)] * 32767).astype("<i2")
     with wave.open(out_path, "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
         w.writeframes(pcm.tobytes())
-    rms = float(np.sqrt((mix ** 2).mean()))
-    print(f"wrote {out_path}: {len(pcm) / SR:.1f}s, peak {np.abs(mix).max():.2f}, rms {rms:.3f}")
+    print(f"wrote {out_path}: {len(pcm) / SR:.1f}s")
 
 
 if __name__ == "__main__":

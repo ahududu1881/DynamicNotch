@@ -47,7 +47,7 @@ Nothing leaves your Mac. There are no analytics, and the only network access is 
 <p align="center">
   <a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><img src="docs/promo.gif" alt="Dynamic Notch in action" width="560"></a>
 </p>
-<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ Watch the full 54-second video</b></a> (1080p, with sound)</p>
+<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ Watch the full 60-second film</b></a> (1080p, with sound)</p>
 
 ## Features
 

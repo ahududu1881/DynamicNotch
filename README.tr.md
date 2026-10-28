@@ -33,7 +33,7 @@ Verilerin Mac'inden çıkmaz, analitik yoktur. Tek ağ erişimi, Music/Spotify b
 <p align="center">
   <a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><img src="docs/promo.gif" alt="Dynamic Notch çalışırken" width="560"></a>
 </p>
-<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ 54 saniyelik videonun tamamını izle</b></a> (1080p, sesli)</p>
+<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ 60 saniyelik filmin tamamını izle</b></a> (1080p, sesli)</p>
 
 ## Özellikler
 
