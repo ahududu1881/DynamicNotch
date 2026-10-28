@@ -1,0 +1,18 @@
+# SwiftPM / build output
+.build/
+build/
+*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Editors and tooling
+.idea/
+.vscode/
+graphify-out/
+
+# Snapshots rendered by the *_SNAPSHOT test helpers
+*.snapshot.png

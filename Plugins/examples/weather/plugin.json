@@ -1,0 +1,9 @@
+{
+  "id": "example.weather",
+  "name": "Weather",
+  "version": "1.0",
+  "description": "Shows the weather at launch and every 30 minutes (open-meteo.com).",
+  "author": "Dynamic Notch",
+  "main": "main.js",
+  "permissions": ["network"]
+}

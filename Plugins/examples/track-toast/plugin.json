@@ -1,0 +1,9 @@
+{
+  "id": "example.track-toast",
+  "name": "Track change toast",
+  "version": "1.0",
+  "description": "Shows the title in the notch when a new track starts.",
+  "author": "Dynamic Notch",
+  "main": "main.js",
+  "permissions": []
+}
