@@ -1,0 +1,50 @@
+#!/bin/zsh
+# Tiny command line client for the Dynamic Notch API.
+#   notch toast "Build finished" [symbol] [#tint] [seconds]
+#   notch progress 0.6 [symbol] [#tint]
+#   notch media toggle|next|previous|seek <seconds>
+#   notch activity <id> "text" [symbol] [level 0-1] [#tint]
+#   notch end <id>
+#   notch timer <seconds> [label]
+#   notch state | activities | expand | collapse
+# Set NOTCH_TOKEN when an access token is configured in Settings.
+PORT=${NOTCH_PORT:-39283}
+URL="http://127.0.0.1:$PORT/v1"
+AUTH=()
+[[ -n "$NOTCH_TOKEN" ]] && AUTH=(-H "Authorization: Bearer $NOTCH_TOKEN")
+post() { curl -s -X POST -H 'Content-Type: application/json' "${AUTH[@]}" -d "$2" "$URL/$1"; echo; }
+
+case "$1" in
+  toast)
+    json=$(python3 -c 'import json,sys; a=sys.argv; d={"text":a[1]}; 
+if len(a)>2 and a[2]: d["symbol"]=a[2]
+if len(a)>3 and a[3]: d["tint"]=a[3]
+if len(a)>4 and a[4]: d["duration"]=float(a[4])
+print(json.dumps(d))' "${@:2}")
+    post toast "$json" ;;
+  progress)
+    json=$(python3 -c 'import json,sys; a=sys.argv; d={"level":float(a[1])}
+if len(a)>2 and a[2]: d["symbol"]=a[2]
+if len(a)>3 and a[3]: d["tint"]=a[3]
+print(json.dumps(d))' "${@:2}")
+    post toast "$json" ;;
+  media)
+    if [[ "$2" == seek ]]; then post media "{\"action\":\"seek\",\"seconds\":$3}"; else post media "{\"action\":\"$2\"}"; fi ;;
+  activity)
+    json=$(python3 -c 'import json,sys; a=sys.argv; d={"id":a[1],"text":a[2]}
+if len(a)>3 and a[3]: d["symbol"]=a[3]
+if len(a)>4 and a[4]: d["level"]=float(a[4])
+if len(a)>5 and a[5]: d["tint"]=a[5]
+print(json.dumps(d))' "${@:2}")
+    post activity "$json" ;;
+  end) post activity/end "{\"id\":\"$2\"}" ;;
+  timer)
+    json=$(python3 -c 'import json,sys; a=sys.argv; d={"seconds":float(a[1])}
+if len(a)>2 and a[2]: d["label"]=a[2]
+print(json.dumps(d))' "${@:2}")
+    post timer "$json" ;;
+  state) curl -s "${AUTH[@]}" "$URL/state"; echo ;;
+  activities) curl -s "${AUTH[@]}" "$URL/activities"; echo ;;
+  expand|collapse) post "$1" '{}' ;;
+  *) sed -n '2,12p' "$0"; exit 1 ;;
+esac

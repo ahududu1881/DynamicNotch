@@ -1,0 +1,9 @@
+{
+  "id": "example.focus-timer",
+  "name": "Focus timer",
+  "version": "1.0",
+  "description": "Starts a 25 minute countdown when a Focus turns on and stops it when it ends.",
+  "author": "Dynamic Notch",
+  "main": "main.js",
+  "permissions": []
+}
