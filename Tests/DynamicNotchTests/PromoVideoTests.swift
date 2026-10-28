@@ -7,10 +7,11 @@ import UniformTypeIdentifiers
 /// Renders the frames of the promo film (docs/promo.mp4) from the app's real views.
 ///
 ///     PROMO_DIR=/tmp/frames swift test --filter PromoVideoTests
-///     python3 scripts/make-promo-audio.py /tmp/frames/timeline.json /tmp/audio.wav
-///     ffmpeg -framerate 30 -i /tmp/frames/frame_%05d.jpg -i /tmp/audio.wav -c:v libx264 -pix_fmt yuv420p -crf 22 -c:a aac docs/promo.mp4
+///     ffmpeg -framerate 30 -i /tmp/frames/frame_%05d.jpg -i soundtrack.wav -c:v libx264 -pix_fmt yuv420p -crf 22 -c:a aac docs/promo.mp4
 ///
-/// The film is cut to a 120 BPM grid: every shot lasts whole bars, so each cut lands on a downbeat of the soundtrack.
+/// The film is cut to the grid of its soundtrack (130.95 BPM, starting on a downbeat): every shot lasts whole bars,
+/// so each cut lands on a downbeat. The Touch ID check is timed to the one-bar break before the final chorus and the
+/// montage starts exactly on the drop.
 /// Within a shot the camera holds still and the island grows from the notch and shrinks back, the way it behaves on screen;
 /// shots change with a short dissolve. Every frame is a pure function of time, and the clock that drives waveforms,
 /// timers and ripples (`ViewClock`) is the film's own. PROMO_RANGE="120-240" renders only those frames,
@@ -47,14 +48,16 @@ final class PromoVideoTests: XCTestCase {
         var keys: [Key]
     }
 
-    static let beat = 0.5
-    static let bar = 2.0
+    static let bpm = 130.95
+    static let beat = 60 / bpm
+    static let bar = 4 * beat
 
     private let frameSize = CGSize(width: 960, height: 540)
     private let clockBase = Date(timeIntervalSinceReferenceDate: 800_000_000)
     private let nw: CGFloat = 186, nh: CGFloat = 32
-    /// When the Touch ID check starts drawing, in seconds after the fingerprint view appears.
-    private let touchSuccess = 1.85
+    /// Seconds after the fingerprint appears at which it is accepted: the check then starts drawing exactly two bars
+    /// into the Touch ID shot, which is the quiet bar of the song.
+    private var touchSuccess: Double { 2 * Self.bar - 0.25 - TouchIDScan.checkStart }
 
     private static func hex(_ value: String) -> Color { Color(hex: value) ?? .black }
 
@@ -197,16 +200,16 @@ final class PromoVideoTests: XCTestCase {
         var film: [Shot] = [
             Shot(line1: "", line2: "", duration: 2 * bar, zoom: 1, palette: "night", kind: .intro, keys: [Key(at: 0, spec: fixed(idle))]),
             Shot(line1: "Now Playing.", line2: "Always in sight.", duration: 2 * bar, zoom: 2.0, palette: "violet",
-                 keys: [Key(at: 0, spec: fixed(idle)), Key(at: 0.12, spec: fixed(pillStrip)), Key(at: 2.5, spec: fixed(pill))]),
+                 keys: [Key(at: 0, spec: fixed(idle)), Key(at: 0.12, spec: fixed(pillStrip)), Key(at: 1.25 * bar, spec: fixed(pill))]),
             Shot(line1: "Everything in reach.", line2: "Without leaving your work.", duration: 2 * bar, zoom: 1.0, palette: "sunset",
                  keys: [Key(at: 0, spec: fixed(pill)), Key(at: 0.3, spec: fixed(player))]),
             Shot(line1: "Switch outputs.", line2: "In a single click.", duration: 2 * bar, zoom: 1.0, palette: "sunset", cut: false,
-                 keys: [Key(at: 0.1, spec: fixed(picker)), Key(at: 3.2, spec: fixed(pill))]),
+                 keys: [Key(at: 0.1, spec: fixed(picker)), Key(at: 2 * bar - 0.65, spec: fixed(pill))]),
             Shot(line1: "Volume.", line2: "Right where you look.", duration: 2 * bar, zoom: 2.2, palette: "ice",
                  keys: [Key(at: 0, spec: fixed(idle)),
-                        Key(at: 0.12, spec: { self.hudSpec(.volume(level: self.steppedLevel($0, from: 0.3125, steps: 6, start: 0.5), muted: false)) })]),
+                        Key(at: 0.12, spec: { self.hudSpec(.volume(level: self.steppedLevel($0, from: 0.3125, steps: 6, start: Self.beat), muted: false)) })]),
             Shot(line1: "Brightness.", line2: "Rays that follow the light.", duration: 2 * bar, zoom: 2.2, palette: "sunset", cut: false,
-                 keys: [Key(at: 0, spec: { self.hudSpec(.brightness(level: self.steppedLevel($0, from: 0.375, steps: 6, start: 0.5))) }),
+                 keys: [Key(at: 0, spec: { self.hudSpec(.brightness(level: self.steppedLevel($0, from: 0.375, steps: 6, start: Self.beat))) }),
                         Key(at: 2 * bar - 0.62, spec: fixed(idle))]),
             Shot(line1: "AirPods.", line2: "Connected in style.", duration: 2 * bar, zoom: 1.6, palette: "ice", keys: breath(fixed(airpods), length: 2 * bar)),
             Shot(line1: "Stay in the moment.", line2: "Messages, right up top.", duration: 2 * bar, zoom: 1.6, palette: "forest",
@@ -216,14 +219,19 @@ final class PromoVideoTests: XCTestCase {
             Shot(line1: "Touch ID.", line2: "With a little magic.", duration: 3 * bar, zoom: 2.0, palette: "forest",
                  keys: [Key(at: 0, spec: fixed(idle)), Key(at: 0.25, spec: { self.touchIDSpec($0 - 0.25) }), Key(at: 3 * bar - 0.62, spec: fixed(idle))]),
         ]
-        // The finale: half-bar cuts through everything, on the beat.
-        let montage: [(Spec, String)] = [(pill, "violet"), (recording, "ember"), (hudSpec(.volume(level: 0.75, muted: false)), "ice"),
-                                         (card, "sunset"), (notification, "forest"), (focus, "ocean"), (airpods, "ice"), (player, "violet")]
-        for (state, palette) in montage {
-            film.append(Shot(line1: "All of it.", line2: "Right at the top.", duration: bar / 2, zoom: 1.5, palette: palette,
+        // The finale: eight bars of half-bar cuts through everything, starting on the drop.
+        let touchFrame = touchIDSpec(touchSuccess + 0.8)
+        let montage: [(Spec, String, CGFloat)] = [
+            (pill, "violet", 1.5), (recording, "ember", 1.8), (hudSpec(.volume(level: 0.75, muted: false)), "ice", 2.0), (card, "sunset", 1.5),
+            (notification, "forest", 1.5), (focus, "ocean", 2.0), (airpods, "ice", 1.5), (player, "violet", 1.1),
+            (battery, "ember", 1.8), (hudSpec(.brightness(level: 0.8)), "sunset", 2.0), (picker, "ocean", 0.9), (pillStrip, "violet", 2.2),
+            (touchFrame, "forest", 2.0), (airpods, "violet", 1.8), (notification, "sunset", 1.8), (player, "ice", 1.2),
+        ]
+        for (state, palette, zoom) in montage {
+            film.append(Shot(line1: "All of it.", line2: "Right at the top.", duration: bar / 2, zoom: zoom, palette: palette,
                              dissolve: 0.08, keys: [Key(at: 0, spec: fixed(state))]))
         }
-        film.append(Shot(line1: "", line2: "", duration: 3 * bar, zoom: 1.5, palette: "night", kind: .outro, keys: [Key(at: 0, spec: fixed(idle))]))
+        film.append(Shot(line1: "", line2: "", duration: 4 * bar, zoom: 1.5, palette: "night", kind: .outro, keys: [Key(at: 0, spec: fixed(idle))]))
         return film
     }
 
@@ -496,7 +504,7 @@ final class PromoVideoTests: XCTestCase {
                 }
             }
             if shot.kind == .intro {
-                titleCard(icon: icon, local: p.local, eyebrow: true, out: easeInOut(clamp((p.local - 3.25) / 0.55)))
+                titleCard(icon: icon, local: p.local, eyebrow: true, out: easeInOut(clamp((p.local - 2.95) / 0.55)))
             }
             if shot.kind == .outro {
                 let fadeOut = easeInOut(clamp((p.local - (shot.duration - 0.7)) / 0.7))
@@ -546,7 +554,7 @@ final class PromoVideoTests: XCTestCase {
         let touch = film.firstIndex { $0.line1 == "Touch ID." } ?? 0
         let montage = film.firstIndex { $0.line1 == "All of it." } ?? 0
         let timeline: [String: Any] = [
-            "bpm": 60 / Self.beat, "total": total, "starts": starts,
+            "bpm": Self.bpm, "beat": Self.beat, "bar": Self.bar, "total": total, "starts": starts,
             "touchCheck": starts[touch] + 0.25 + touchSuccess + TouchIDScan.checkStart,
             "touchStart": starts[touch], "montageStart": starts[montage], "outroStart": starts.last ?? total,
         ]

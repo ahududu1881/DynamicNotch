@@ -47,7 +47,7 @@ Nothing leaves your Mac. There are no analytics, and the only network access is 
 <p align="center">
   <a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><img src="docs/promo.gif" alt="Dynamic Notch in action" width="560"></a>
 </p>
-<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ Watch the full 60-second film</b></a> (1080p, with sound)</p>
+<p align="center"><a href="https://github.com/ahududu1881/DynamicNotch/blob/main/docs/promo.mp4"><b>▶ Watch the full 64-second film</b></a> (1080p, with sound)</p>
 
 ## Features
 
@@ -161,7 +161,6 @@ python3 scripts/stress.py  # hostile traffic and 1400+ concurrent requests again
 swift scripts/make-icon.swift  # regenerates Resources/AppIcon.icns and docs/icon.png
 MARKETING_SNAPSHOT=docs swift test --filter MarketingSnapshotTests  # regenerates docs/hero.jpg and docs/features/*.jpg
 PROMO_DIR=/tmp/frames swift test --filter PromoVideoTests  # renders the promo video frames, see the header of Tests/DynamicNotchTests/PromoVideoTests.swift
-python3 scripts/make-promo-audio.py /tmp/frames/timeline.json docs/promo-audio.wav  # the video's soundtrack, synthesised from scratch (original, no licence needed)
 ```
 
 Code layout: `Sources/DynamicNotch` (the app), `Tests/DynamicNotchTests`, `Helper/` (the MediaRemote bridge), `Plugins/examples`.
