@@ -17,8 +17,8 @@ Requires macOS 14 or later. Made for MacBooks with a notch; other Macs get a sim
 
 ## Install
 
-Download the `.zip` from [Releases](../../releases), move **Dynamic Notch.app** to Applications and open it.
-The app is not notarized by Apple, so the first time you may need to right-click it and choose **Open**.
+Download **DynamicNotch-1.0.0.dmg** from [Releases](../../releases), open it and drag **Dynamic Notch** onto the **Applications** shortcut.
+The app is not notarized by Apple, so the first time you may need to right-click it in Applications and choose **Open**.
 
 Or build it from source (the Xcode command line tools are enough):
 
@@ -28,7 +28,7 @@ Or build it from source (the Xcode command line tools are enough):
 
 The build is signed with the first Apple Development / Developer ID identity in your keychain, or set `SIGN_IDENTITY`.
 Without one it is ad-hoc signed, and macOS asks for the permissions again after every rebuild.
-`./scripts/package.sh` builds and zips the app for a release.
+`./scripts/package.sh` builds the app and wraps it in a drag-to-Applications `.dmg` for a release.
 
 ## Permissions
 

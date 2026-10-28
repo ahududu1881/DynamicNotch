@@ -14,8 +14,8 @@ MacBook notch'unu Dynamic Island'a çeviren menü çubuğu uygulaması. macOS 14
 
 ## Kurulum
 
-[Releases](../../releases) sayfasındaki `.zip` dosyasını aç, **Dynamic Notch.app**'i Uygulamalar'a taşı. Uygulama Apple tarafından
-notarize edilmediği için ilk açılışta sağ tık → **Aç** demen gerekebilir.
+[Releases](../../releases) sayfasındaki **DynamicNotch-1.0.0.dmg** dosyasını aç, **Dynamic Notch**'i **Uygulamalar** kısayoluna sürükle. Uygulama Apple tarafından
+notarize edilmediği için ilk açılışta Uygulamalar'da sağ tık → **Aç** demen gerekebilir.
 
 Ya da kaynaktan derle (Xcode komut satırı araçları yeter):
 
