@@ -161,6 +161,8 @@ final class PromoVideoTests: XCTestCase {
                        AudioOutput(id: 2, name: "MacBook Pro Speakers", symbol: "laptopcomputer", isDefault: true),
                        AudioOutput(id: 3, name: "Living Room", symbol: "airplayaudio", isDefault: false)]
 
+        // The model's own timers (activity expiry) follow the film's clock, not the wall clock.
+        ViewClock.override = clockBase
         Settings.shared.titleStripSeconds = 3600
         let pillStrip = spec(of: makeModel { $0.setMedia(self.nowPlaying(), artwork: art) })
         Settings.shared.showTitleStrip = false
@@ -178,12 +180,19 @@ final class PromoVideoTests: XCTestCase {
                                      body: "Are we still on for tonight? I booked the table for 8."), duration: 3600)
         })
         let battery = spec(of: makeModel { $0.showHUD(.power(percent: 20, charging: false, plugged: false), duration: 3600) })
-        let focus = spec(of: makeModel { $0.showHUD(.focus(name: "Work", symbol: "briefcase.fill", tint: "#0A84FF", on: true), duration: 3600) })
+        let focus = spec(of: makeModel { $0.showHUD(.focus(name: "Do Not Disturb", symbol: "moon.fill", tint: "#5E5CE6", on: true), duration: 3600) })
         let recording = spec(of: makeModel {
             $0.upsertActivity(Activity(id: Activity.recordingID, symbol: "record.circle.fill", text: "Screen recording",
                                        subtitle: nil, level: nil, tint: "#FF3B30", startDate: self.clockBase.addingTimeInterval(-751),
                                        endDate: nil, expires: .distantFuture, countsUp: true))
         })
+        let timerCard = spec(of: makeModel {
+            $0.upsertActivity(Activity(id: "tea", symbol: "timer", text: "Timer", subtitle: nil, level: nil, tint: "#FF9F0A",
+                                       startDate: self.clockBase, endDate: self.clockBase.addingTimeInterval(178),
+                                       expires: self.clockBase.addingTimeInterval(3_600)))
+        })
+        let lock = spec(of: makeModel { $0.showHUD(.lock(locked: true), duration: 3600) })
+        let linkToast = spec(of: makeModel { $0.showHUD(.custom(symbol: "link", text: "", level: nil, tint: "#34C759"), duration: 3600) })
         let card = spec(of: makeModel {
             $0.showHUD(.card(symbol: "shippingbox.fill", title: "Deploy finished", subtitle: "v2.4 is live in production",
                              tint: "#0A84FF", url: nil), duration: 3600)
@@ -224,8 +233,8 @@ final class PromoVideoTests: XCTestCase {
         let montage: [(Spec, String, CGFloat)] = [
             (pill, "violet", 1.5), (recording, "ember", 1.8), (hudSpec(.volume(level: 0.75, muted: false)), "ice", 2.0), (card, "sunset", 1.5),
             (notification, "forest", 1.5), (focus, "ocean", 2.0), (airpods, "ice", 1.5), (player, "violet", 1.1),
-            (battery, "ember", 1.8), (hudSpec(.brightness(level: 0.8)), "sunset", 2.0), (picker, "ocean", 0.9), (pillStrip, "violet", 2.2),
-            (touchFrame, "forest", 2.0), (airpods, "violet", 1.8), (notification, "sunset", 1.8), (player, "ice", 1.2),
+            (battery, "ember", 1.8), (hudSpec(.brightness(level: 0.8)), "sunset", 2.0), (timerCard, "sunset", 1.8), (picker, "ocean", 0.9),
+            (touchFrame, "forest", 2.0), (lock, "ocean", 2.2), (linkToast, "violet", 2.2), (pillStrip, "violet", 2.2),
         ]
         for (state, palette, zoom) in montage {
             film.append(Shot(line1: "All of it.", line2: "Right at the top.", duration: bar / 2, zoom: zoom, palette: palette,

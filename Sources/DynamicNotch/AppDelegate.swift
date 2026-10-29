@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let focus = FocusMonitor()
     private let touchID = TouchIDMonitor()
     private let screenRecording = ScreenRecordingMonitor()
+    private let lockMonitor = LockScreenMonitor()
     private var systemMedia: SystemMediaProvider?
     private var scriptingFallbackActive = false
     private let health = HealthStore()
@@ -100,6 +101,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.handleRecording(event) }
         }
         screenRecording.start()
+        lockMonitor.onChange = { [weak self] locked in
+            guard let self else { return }
+            self.plugins.emit("lock", ["locked": locked])
+            self.controller.setLocked(locked, showIndicator: Settings.shared.showLockIndicator)
+        }
+        lockMonitor.start()
 
         setupStatusItem()
         controller.setEnabled(settings.notchEnabled)
@@ -214,6 +221,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             list.append(status(L("Medya", "Media"), ok: true, warn: true, L("köprü pakette yok; yalnızca Music/Spotify", "bridge not bundled; Music/Spotify only")))
         }
 
+        list.append(status(L("Kilit ekranı", "Lock screen"), ok: controller.lockScreenAvailable, warn: true,
+                           controller.lockScreenAvailable ? L("kilit ekranında gösterilebilir", "can show on the lock screen")
+                                                          : L("SkyLight sembolleri bulunamadı: yalnızca masaüstünde", "SkyLight symbols missing: desktop only")))
         list.append(status(L("Erişilebilirlik izni", "Accessibility permission"), ok: system.hasAccessibility, warn: true,
                            system.hasAccessibility ? L("verildi", "granted") : L("verilmedi: macOS göstergeleri engellenemez", "not granted: macOS HUDs cannot be replaced")))
         list.append(status(L("Tuş yakalama", "Key capture"), ok: system.tapRunning || !system.hasAccessibility, warn: true,

@@ -186,6 +186,10 @@ struct SettingsView: View {
                 toggle(L("Şarj ve düşük pil bildirimleri", "Charging and low battery cards"), nil, $settings.showBatteryToasts)
                 toggle(L("Odak modu açılıp kapanınca göster", "Show Focus turning on/off"),
                        L("Tam Disk Erişimi gerekir.", "Needs Full Disk Access."), $settings.focusToasts)
+                toggle(L("Kilit ekranında göster", "Show on the lock screen"),
+                       L("Ekran kilitliyken notch'ta bir asma kilit görünür, açınca kilit açılır. macOS'un belgelenmemiş bir özelliğini kullanır.",
+                         "A padlock sits in the notch while the Mac is locked and opens on unlock. Uses an undocumented macOS feature."),
+                       $settings.showLockIndicator)
             }
         }
     }

@@ -8,14 +8,13 @@ final class CompositeHUDTests: XCTestCase {
         NowPlaying(source: .spotify, title: "t", artist: "", album: "", duration: 10, position: 0, positionDate: Date(), isPlaying: true)
     }
 
-    func testFocusOverLivePillKeepsThePillAndGrowsDownward() {
+    func testFocusOverLivePillTakesTheWingsForAMoment() {
         let m = NotchModel(geometry: .fallback)
         m.setMedia(playing(), artwork: nil)
-        let pill = m.bodySize.width
         m.showHUD(.focus(name: "Work", symbol: "briefcase.fill", tint: "#0A84FF", on: true), duration: 2, id: "focus")
-        XCTAssertTrue(m.hudOverLive)
-        XCTAssertEqual(m.bodySize.width, pill, "the pill keeps its width so artwork and waveform stay visible")
-        XCTAssertEqual(m.bodySize.height, NotchGeometry.fallback.notchHeight + HUDKind.focus(name: "", symbol: "", tint: "", on: true).rowHeight)
+        XCTAssertFalse(m.hudOverLive, "the Focus pill uses the wings itself, so the media pill steps aside")
+        XCTAssertEqual(m.bodySize.width, NotchGeometry.fallback.notchWidth + 2 * NotchModel.wingPillWidth)
+        XCTAssertEqual(m.bodySize.height, NotchGeometry.fallback.notchHeight, "a wing pill never grows below the notch")
     }
 
     func testWithoutPillTheHUDStaysNotchWidthAndCardsReplaceThePill() {

@@ -57,6 +57,10 @@ enum HUDKind: Equatable {
     case focus(name: String, symbol: String, tint: String, on: Bool)
     /// A macOS notification mirrored into the notch (WhatsApp, Instagram, Messages...).
     case notification(bundleID: String, app: String, title: String, body: String)
+    /// A running timer expanded into a card with pause / cancel buttons and the time left.
+    case timer(id: String)
+    /// The Mac is locked (padlock stays) or has just been unlocked (padlock opens).
+    case lock(locked: Bool)
 }
 
 enum TouchIDPhase: Equatable { case waiting, success }
@@ -126,34 +130,46 @@ extension HUDKind {
     /// System state changes that are still worth showing while a full-screen app is active.
     var showsInFullscreen: Bool {
         switch self {
-        case .volume, .brightness, .focus, .accessory, .output, .touchID: return true
+        case .volume, .brightness, .focus, .accessory, .output, .touchID, .lock: return true
         default: return false
         }
     }
 
     var isTouchID: Bool { if case .touchID = self { return true } else { return false } }
 
-    /// Wide, tall presentations (notification, battery) that replace the pill and are never shown inline.
+    /// Wide, tall presentations (notification, battery, accessory, timer) that replace the pill and are never shown inline.
     var isCard: Bool {
         switch self {
-        case .notification, .power, .card: return true
+        case .notification, .power, .card, .accessory, .timer: return true
+        default: return false
+        }
+    }
+
+    /// Light events that live inside the notch's own height: an icon in the left wing, an optional word in the right one.
+    var isWing: Bool {
+        switch self {
+        case .focus, .lock: return true
+        case .custom(_, let text, let level, _): return text.isEmpty && level == nil
         default: return false
         }
     }
 
     /// Height of the row under the notch for the compact HUD styles.
-    var rowHeight: CGFloat {
-        switch self {
-        case .focus: return 58
-        case .accessory: return 132
-        default: return NotchModel.hudRow
-        }
-    }
+    var rowHeight: CGFloat { NotchModel.hudRow }
 
     var cardHeight: CGFloat {
         switch self {
         case .power: return 70
+        case .accessory, .timer: return 64
         default: return 78
+        }
+    }
+
+    var cardWidth: CGFloat {
+        switch self {
+        case .accessory: return 330
+        case .timer: return 300
+        default: return NotchModel.notificationWidth
         }
     }
 
@@ -162,7 +178,7 @@ extension HUDKind {
         case .volume, .brightness: return .high
         case .power(_, _, let plugged): return plugged ? .normal : .critical
         case .touchID: return .immediate
-        case .custom, .notification, .focus, .accessory, .card: return .normal
+        case .custom, .notification, .focus, .accessory, .card, .timer, .lock: return .normal
         case .mediaKey, .output: return .low
         }
     }
@@ -179,6 +195,8 @@ extension HUDKind {
         case .focus: return "focus"
         case .accessory: return "accessory"
         case .card: return "card"
+        case .timer: return "timer-card"
+        case .lock: return "lock"
         case .touchID: return "touchid"
         case .notification(let bundleID, _, _, _): return "notification:\(bundleID)"
         }
@@ -219,12 +237,19 @@ struct Activity: Identifiable, Equatable {
 
     /// Counts elapsed time instead of remaining time (the screen recording indicator).
     var countsUp = false
+    /// Set while a timer is paused: the time that was left at that moment.
+    var pausedRemaining: TimeInterval?
     static let recordingID = "system.recording"
 
     var isRecording: Bool { id == Activity.recordingID }
     var isTimer: Bool { endDate != nil }
 
-    func remaining(at date: Date = Date()) -> TimeInterval { max(0, (endDate ?? date).timeIntervalSince(date)) }
+    var isPaused: Bool { pausedRemaining != nil }
+
+    func remaining(at date: Date = Date()) -> TimeInterval {
+        if let pausedRemaining { return max(0, pausedRemaining) }
+        return max(0, (endDate ?? date).timeIntervalSince(date))
+    }
     var totalDuration: TimeInterval { max(1, (endDate ?? startDate).timeIntervalSince(startDate)) }
 }
 

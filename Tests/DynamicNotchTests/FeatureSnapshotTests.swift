@@ -2,43 +2,49 @@ import XCTest
 import SwiftUI
 @testable import DynamicNotch
 
-/// Renders the focus and accessory HUDs the way they sit under the notch.
+/// Renders the card and wing-pill HUDs with the real notch view, over a stand-in wallpaper.
 @MainActor
 final class FeatureSnapshotTests: XCTestCase {
+    private func shot(_ setup: (NotchModel) -> Void) -> some View {
+        let model = NotchModel(geometry: .fallback)
+        setup(model)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        return ZStack(alignment: .top) {
+            LinearGradient(colors: [Color(red: 0.55, green: 0.6, blue: 0.7), Color(red: 0.85, green: 0.87, blue: 0.9)], startPoint: .top, endPoint: .bottom)
+            NotchRootView(model: model)
+        }
+        .frame(width: 400, height: 130)
+    }
+
     func testRender() throws {
         guard let out = ProcessInfo.processInfo.environment["FEATURE_SNAPSHOT"] else { return }
-        let nw: CGFloat = 186, nh: CGFloat = 32
-        func notch<V: View>(_ height: CGFloat, @ViewBuilder _ content: () -> V) -> some View {
-            ZStack(alignment: .top) {
-                Color.black
-                VStack(spacing: 0) { Spacer().frame(height: nh); content().frame(width: nw, height: height) }
+        Settings.shared.language = AppLanguage.en.rawValue
+        defer { Settings.shared.language = AppLanguage.system.rawValue }
+        let timer = Activity(id: "tea", symbol: "timer", text: "Timer", subtitle: nil, level: nil, tint: "#FF9F0A",
+                             startDate: Date(), endDate: Date().addingTimeInterval(117), expires: Date().addingTimeInterval(3600))
+        let sheet = VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                shot { $0.showHUD(.accessory(name: "AirPods Pro", model: .airpodsPro, connected: true, battery: AccessoryBattery(left: 80, right: 78, box: 55)), duration: 600) }
+                shot { $0.showHUD(.accessory(name: "AirPods Pro", model: .airpodsPro, connected: true, battery: nil), duration: 600) }
             }
-            .frame(width: nw, height: nh + height)
-            .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 16, bottomTrailingRadius: 16))
-        }
-        let accessories: [(String, AccessoryModel, AccessoryBattery?)] = [
-            ("AirPods Pro", .airpodsPro, AccessoryBattery(left: 80, right: 78, box: 55)),
-            ("AirPods 4", .airpods4, AccessoryBattery(left: 92, right: 18, box: 70)),
-            ("AirPods Max", .airpodsMax, AccessoryBattery(main: 64)),
-            ("Beats Studio Pro", .beatsHeadphones, nil),
-            ("Beats Fit Pro", .beatsFitPro, AccessoryBattery(left: 60, right: 58, box: 35)),
-        ]
-        let sheet = VStack(spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                ForEach(0..<accessories.count, id: \.self) { i in
-                    notch(132) { AccessoryFeature(name: accessories[i].0, model: accessories[i].1, connected: true, battery: accessories[i].2) }
-                }
-                notch(132) { AccessoryFeature(name: "AirPods Pro", model: .airpodsPro, connected: false, battery: nil) }
+            HStack(spacing: 10) {
+                shot { $0.showHUD(.accessory(name: "Beats Studio Pro", model: .beatsHeadphones, connected: true, battery: AccessoryBattery(main: 14)), duration: 600) }
+                shot { $0.showHUD(.accessory(name: "AirPods Max", model: .airpodsMax, connected: false, battery: nil), duration: 600) }
             }
-            HStack(alignment: .top, spacing: 14) {
-                notch(58) { FocusFeature(name: "İş", symbol: "briefcase.fill", tint: "#0A84FF", on: true) }
-                notch(58) { FocusFeature(name: "İş", symbol: "briefcase.fill", tint: "#0A84FF", on: false) }
-                notch(58) { FocusFeature(name: "Rahatsız Etme", symbol: "moon.fill", tint: "#5E5CE6", on: true) }
-                notch(58) { FocusFeature(name: "Uyku", symbol: "bed.double.fill", tint: "#64D2FF", on: true) }
-                notch(58) { FocusFeature(name: "Oyun", symbol: "gamecontroller.fill", tint: "#30D158", on: true) }
+            HStack(spacing: 10) {
+                shot { $0.upsertActivity(timer) }
+                shot { $0.showHUD(.focus(name: "Work", symbol: "moon.fill", tint: "#5E5CE6", on: true), duration: 600) }
+            }
+            HStack(spacing: 10) {
+                shot { $0.showHUD(.focus(name: "Work", symbol: "moon.fill", tint: "#5E5CE6", on: false), duration: 600) }
+                shot { $0.showHUD(.custom(symbol: "link", text: "", level: nil, tint: "#34C759"), duration: 600) }
+            }
+            HStack(spacing: 10) {
+                shot { $0.showHUD(.lock(locked: true), duration: 600) }
+                shot { $0.showHUD(.lock(locked: false), duration: 600) }
             }
         }
-        .padding(16).background(Color(white: 0.18))
+        .padding(12).background(Color(white: 0.12))
         let renderer = ImageRenderer(content: sheet)
         renderer.scale = 2
         let image = try XCTUnwrap(renderer.nsImage)

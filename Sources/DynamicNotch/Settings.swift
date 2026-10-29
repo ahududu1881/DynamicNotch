@@ -36,6 +36,7 @@ final class Settings: ObservableObject {
         static let showAccessoryToasts = true
         static let showBatteryToasts = true
         static let focusToasts = true
+        static let showLockIndicator = true
         static let expandOnHover = false
         static let scrollGestures = true
         static let hotkeys = true
@@ -84,6 +85,7 @@ final class Settings: ObservableObject {
     @Published var showOutputToasts: Bool { didSet { save(showOutputToasts, "showOutputToasts") } }
     @Published var showBatteryToasts: Bool { didSet { save(showBatteryToasts, "showBatteryToasts") } }
     @Published var focusToasts: Bool { didSet { save(focusToasts, "focusToasts") } }
+    @Published var showLockIndicator: Bool { didSet { save(showLockIndicator, "showLockIndicator") } }
 
     // Player and interaction
     @Published var expandOnHover: Bool { didSet { save(expandOnHover, "expandOnHover") } }
@@ -136,6 +138,7 @@ final class Settings: ObservableObject {
         showAccessoryToasts = bool("showAccessoryToasts", Default.showAccessoryToasts)
         showBatteryToasts = bool("showBatteryToasts", Default.showBatteryToasts)
         focusToasts = bool("focusToasts", Default.focusToasts)
+        showLockIndicator = bool("showLockIndicator", Default.showLockIndicator)
 
         expandOnHover = bool("expandOnHover", Default.expandOnHover)
         scrollGestures = bool("scrollGestures", Default.scrollGestures)
@@ -178,6 +181,7 @@ final class Settings: ObservableObject {
         showOutputToasts = Default.showOutputToasts; showScreenRecording = Default.showScreenRecording
         touchIDIndicator = Default.touchIDIndicator; showAccessoryToasts = Default.showAccessoryToasts
         showBatteryToasts = Default.showBatteryToasts; focusToasts = Default.focusToasts
+        showLockIndicator = Default.showLockIndicator
 
         expandOnHover = Default.expandOnHover; scrollGestures = Default.scrollGestures
         hotkeys = Default.hotkeys; showTitleStrip = Default.showTitleStrip

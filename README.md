@@ -68,8 +68,13 @@ Nothing leaves your Mac. There are no analytics, and the only network access is 
     <td><img src="docs/features/battery.jpg" alt="Low battery"></td>
   </tr>
   <tr>
+    <td><img src="docs/features/timer.jpg" alt="Timers"></td>
+    <td><img src="docs/features/lock.jpg" alt="Lock screen"></td>
     <td><img src="docs/features/touchid.jpg" alt="Touch ID"></td>
+  </tr>
+  <tr>
     <td><img src="docs/features/recording.jpg" alt="Screen recording"></td>
+    <td><img src="docs/features/toast.jpg" alt="Quick toasts"></td>
     <td><img src="docs/features/plugins.jpg" alt="Plugins"></td>
   </tr>
 </table>
@@ -78,9 +83,11 @@ Nothing leaves your Mac. There are no analytics, and the only network access is 
 
 - **Live media.** Whatever is playing on the Mac (Spotify, Music, browsers, YouTube...) in a pill with the artwork and a waveform; click it for the full player with progress, controls and an output device picker.
 - **Volume, brightness and media keys** in the notch instead of macOS's toast. While the player is open the feedback grows out of its bottom.
-- **AirPods, Beats and JBL.** A short strip with the model's icon when they connect or leave, then the battery of each bud and the case.
+- **AirPods, Beats and JBL.** A card with the model's icon, "Connected" over the name and the battery as a ring; the label then shows each bud and the case.
+- **Timers.** A timer opens a card with pause and cancel buttons and the time left in large type.
+- **Lock screen.** A padlock sits in the notch while the Mac is locked and opens when you unlock it (experimental: it relies on an undocumented macOS feature, see Settings → Advanced for its status).
 - **Notifications.** WhatsApp, Instagram, Messages and more (or every app) appear in the notch with the sender and text.
-- **Focus.** The mode's name, icon and colour when it turns on or off.
+- **Focus.** A slim pill beside the camera housing: the mode's icon on the left, "On" or "Off" on the right.
 - **Touch ID.** An animation modelled on Face ID while the fingerprint is requested, ending in a check.
 - **Low battery and charging** cards in the style of the iPhone's alert, with the animated ring.
 - **Screen recording** indicator with a timer.

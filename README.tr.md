@@ -54,14 +54,21 @@ Verilerin Mac'inden çıkmaz, analitik yoktur. Tek ağ erişimi, Music/Spotify b
     <td><img src="docs/features/battery.jpg" alt="Low battery"></td>
   </tr>
   <tr>
+    <td><img src="docs/features/timer.jpg" alt="Timers"></td>
+    <td><img src="docs/features/lock.jpg" alt="Lock screen"></td>
     <td><img src="docs/features/touchid.jpg" alt="Touch ID"></td>
+  </tr>
+  <tr>
     <td><img src="docs/features/recording.jpg" alt="Screen recording"></td>
+    <td><img src="docs/features/toast.jpg" alt="Quick toasts"></td>
     <td><img src="docs/features/plugins.jpg" alt="Plugins"></td>
   </tr>
 </table>
 
 - **Canlı medya:** Sistem genelindeki medya (Spotify, Music, tarayıcı/YouTube...) yatay açılan pill'de; üstüne basınca tam oynatıcı (ilerleme, kontroller, ses çıkışı seçici).
 - **Ses / parlaklık / medya tuşları:** macOS göstergesi yerine notch'ta; büyük oynatıcı açıkken altından büyüyerek gösterilir.
+- **Zamanlayıcı:** Zamanlayıcı başlayınca duraklat/iptal düğmeli, süresi büyük yazılı bir kart açılır.
+- **Kilit ekranı:** Mac kilitliyken notch'ta bir asma kilit durur, kilit açılınca açılır (deneysel: belgelenmemiş bir macOS özelliğine dayanır, durumu Ayarlar → Gelişmiş'te görünür).
 - **Bildirim kuyruğu:** Öncelikli, aynı kanalı yerinde güncelleyen, sınırlı kuyruk. Ses/parlaklık her şeyin önüne geçer, yarım kalan bildirim sonra devam eder.
 - **Aktiviteler ve zamanlayıcılar:** Başka uygulamaların kalıcı göstergeleri (indirme, build...) ve geri sayım; medya yokken pill'de görünür.
 - **AirPods / Bluetooth kulaklık:** Bağlanınca ve çıkınca model ikonuyla (AirPods, Pro, Max, 3, 4...) kısa bir şerit; pil seviyesi (sol/sağ/kutu) bir an sonra yerinde eklenir.

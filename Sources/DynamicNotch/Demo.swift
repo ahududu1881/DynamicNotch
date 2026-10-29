@@ -10,7 +10,7 @@ final class DemoRunner {
     }
 
     static let names = ["toast", "volume", "brightness", "focus", "airpodspro", "airpods4", "airpodsmax", "beats", "beatsbuds", "output", "charging", "battery", "critical",
-                        "notification", "touchid", "timer", "recording"]
+                        "notification", "touchid", "timer", "recording", "lock"]
 
     private let model: NotchModel
     private var task: Task<Void, Never>?
@@ -74,6 +74,9 @@ final class DemoRunner {
                         m.upsertActivity(Activity(id: "demo-timer", symbol: "timer", text: L("Çay", "Tea"), subtitle: nil, level: nil, tint: "#FF9F0A",
                                                   startDate: now, endDate: now.addingTimeInterval(5), expires: now.addingTimeInterval(10)))
                     }, seconds: 7)]
+        case "lock":
+            return [Step(name: name, run: { $0.showHUD(.lock(locked: true), duration: 30, id: "demo-lock") }, seconds: 2.4),
+                    Step(name: name, run: { $0.showHUD(.lock(locked: false), duration: 1.3, id: "demo-lock") }, seconds: 2.2)]
         case "recording":
             return [Step(name: name, run: { m in
                         m.upsertActivity(Activity(id: Activity.recordingID, symbol: "record.circle.fill", text: L("Ekran kaydı", "Screen recording"), subtitle: nil,

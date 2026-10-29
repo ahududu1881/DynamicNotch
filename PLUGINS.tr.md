@@ -83,6 +83,7 @@ notch.off("media", handler)
 | `accessory` | `name`, `connected`, `model` (AirPods, Beats, JBL...) |
 | `recording` | `active`, `seconds` (bittiğinde) |
 | `touchid` | `phase`: `waiting`, `success`, `cancelled` |
+| `lock` | `locked`: Mac kilitlenince `true`, kilit açılınca `false` |
 | `timer` | `id`, `label`: eklentinin kurduğu zamanlayıcı bitince |
 | `notification` | `app`, `bundleId`, `title`, `subtitle`, `body` (**`notifications` izni gerekir**) |
 

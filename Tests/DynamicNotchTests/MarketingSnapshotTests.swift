@@ -21,6 +21,7 @@ final class MarketingSnapshotTests: XCTestCase {
         "forest": Palette(top: MarketingSnapshotTests.hex("#0F4C5C"), bottom: MarketingSnapshotTests.hex("#6FCF97"), glowA: MarketingSnapshotTests.hex("#2D9CDB"), glowB: MarketingSnapshotTests.hex("#F2E394")),
         "ember": Palette(top: MarketingSnapshotTests.hex("#3A1C71"), bottom: MarketingSnapshotTests.hex("#FF512F"), glowA: MarketingSnapshotTests.hex("#D76D77"), glowB: MarketingSnapshotTests.hex("#FFAF7B")),
         "ice": Palette(top: MarketingSnapshotTests.hex("#1D2B64"), bottom: MarketingSnapshotTests.hex("#6DD5FA"), glowA: MarketingSnapshotTests.hex("#9B8CFF"), glowB: MarketingSnapshotTests.hex("#E0F7FF")),
+        "night": Palette(top: MarketingSnapshotTests.hex("#0B0B1E"), bottom: MarketingSnapshotTests.hex("#3A1C71"), glowA: MarketingSnapshotTests.hex("#2B2FC0"), glowB: MarketingSnapshotTests.hex("#FF5EA8")),
     ]
 
     private func wallpaper(_ name: String) -> some View {
@@ -188,8 +189,8 @@ final class MarketingSnapshotTests: XCTestCase {
                 scale: 2, to: features.appendingPathComponent("battery.jpg"))
 
         // Focus.
-        let focus = makeModel { $0.showHUD(.focus(name: "Work", symbol: "briefcase.fill", tint: "#0A84FF", on: true), duration: 600) }
-        try png(tile("ocean", zoom: 2.2, "Focus", "Mode name, icon and colour when it switches") { model(focus) },
+        let focus = makeModel { $0.showHUD(.focus(name: "Do Not Disturb", symbol: "moon.fill", tint: "#5E5CE6", on: true), duration: 600) }
+        try png(tile("ocean", zoom: 2.2, "Focus", "A quiet pill when a Focus switches") { model(focus) },
                 scale: 2, to: features.appendingPathComponent("focus.jpg"))
 
         // Screen recording.
@@ -208,6 +209,23 @@ final class MarketingSnapshotTests: XCTestCase {
         }
         try png(tile("sunset", zoom: 1.6, "Plugins", "Write your own in JavaScript") { model(card) },
                 scale: 2, to: features.appendingPathComponent("plugins.jpg"))
+
+        // Timer, lock screen and a quick toast.
+        ViewClock.override = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let timer = makeModel {
+            $0.upsertActivity(Activity(id: "tea", symbol: "timer", text: "Timer", subtitle: nil, level: nil, tint: "#FF9F0A",
+                                       startDate: ViewClock.date(Date()), endDate: ViewClock.date(Date()).addingTimeInterval(117),
+                                       expires: ViewClock.date(Date()).addingTimeInterval(3_600)))
+        }
+        defer { ViewClock.override = nil }
+        try png(tile("ember", zoom: 1.7, "Timers", "Pause, cancel and watch the time in large type") { model(timer) },
+                scale: 2, to: features.appendingPathComponent("timer.jpg"))
+        let lockModel = makeModel { $0.showHUD(.lock(locked: true), duration: 600) }
+        try png(tile("night", zoom: 2.2, "Lock screen", "A padlock that opens when you unlock") { model(lockModel) },
+                scale: 2, to: features.appendingPathComponent("lock.jpg"))
+        let toast = makeModel { $0.showHUD(.custom(symbol: "link", text: "", level: nil, tint: "#34C759"), duration: 600) }
+        try png(tile("forest", zoom: 2.2, "Quick toasts", "A single icon for the small things") { model(toast) },
+                scale: 2, to: features.appendingPathComponent("toast.jpg"))
 
         // Touch ID: the finished check inside its ring (drawn at a fixed point of the real animation).
         let nw: CGFloat = 186, nh: CGFloat = 32, th = NotchModel.touchIDHeight

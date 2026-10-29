@@ -63,10 +63,11 @@ final class FocusTests: XCTestCase {
     }
 
     @MainActor
-    func testFocusHUDGrowsDownwardAndKeepsTheNotchWidth() {
+    func testFocusHUDIsAWingPillInsideTheNotchHeight() {
         let m = NotchModel(geometry: .fallback)
         m.showHUD(.focus(name: "Work", symbol: "briefcase.fill", tint: "#0A84FF", on: true), duration: 2, id: "focus")
-        XCTAssertEqual(m.bodySize.width, NotchGeometry.fallback.notchWidth)
-        XCTAssertEqual(m.bodySize.height, NotchGeometry.fallback.notchHeight + HUDKind.focus(name: "Work", symbol: "briefcase.fill", tint: "#0A84FF", on: true).rowHeight)
+        XCTAssertEqual(m.bodySize.width, NotchGeometry.fallback.notchWidth + 2 * NotchModel.wingPillWidth)
+        XCTAssertEqual(m.bodySize.height, NotchGeometry.fallback.notchHeight)
+        XCTAssertEqual(m.topRadius, 6)
     }
 }

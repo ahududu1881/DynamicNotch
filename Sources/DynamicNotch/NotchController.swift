@@ -12,6 +12,9 @@ final class NotchController {
     private(set) var fullscreenActive = false
     private var hudVisible = false
     private var hudGraceUntil = Date.distantPast
+    private let lockPresenter = LockScreenPresenter()
+    private(set) var screenLocked = false
+    var lockScreenAvailable: Bool { lockPresenter.isAvailable }
 
     /// Whether a HUD of this kind may be shown right now. In a full-screen app only system state changes
     /// (volume, brightness, Focus, accessories) get through; the rest waits.
@@ -79,6 +82,27 @@ final class NotchController {
             MainActor.assumeIsolated { self?.refreshVisibility() }
         }
         refreshVisibility()
+    }
+
+    /// The Mac locked or unlocked. While locked the notch shows a padlock on the lock screen (or the media pill when music
+    /// plays); on unlock the padlock opens and leaves.
+    func setLocked(_ locked: Bool, showIndicator: Bool) {
+        screenLocked = locked
+        guard showIndicator, !userDisabled else {
+            if !locked { lockPresenter.hide() }
+            return
+        }
+        if locked {
+            lockPresenter.show(model: model, frame: panelFrame())
+            // With music playing the pill takes over after a moment; otherwise the padlock stays.
+            model.showHUD(.lock(locked: true), duration: model.pillShowsMedia ? 2.6 : 86_400)
+        } else {
+            model.showHUD(.lock(locked: false), duration: 1.3)
+            // The panel in the lock-screen space stays until the animation has played.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
+                MainActor.assumeIsolated { if self?.screenLocked == false { self?.lockPresenter.hide() } }
+            }
+        }
     }
 
     func setEnabled(_ enabled: Bool) {

@@ -66,7 +66,7 @@ struct NotchContent: View {
                 .blurReveal(mediaVisible, delay: 0.08, scale: 0.75, blur: 4, anchor: .center)
 
             // Activities pushed by other apps use the pill when no media is live.
-            if let activity = model.pillActivity {
+            if let activity = model.pillActivity, pillOn {
                 Image(systemName: activity.symbol)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(activity.tint.flatMap(Color.init(hex:)) ?? .white)
@@ -146,13 +146,16 @@ struct NotchContent: View {
                         .transition(.opacity)
                 } else if case .accessory(let name, let model, let connected, let battery) = hud {
                     AccessoryFeature(name: name, model: model, connected: connected, battery: battery)
-                        .frame(width: size.width, height: hud.rowHeight, alignment: .top)
-                        .offset(y: nh)
+                        .frame(width: size.width - 44, height: hud.cardHeight - 14, alignment: .center)
+                        .offset(x: 22, y: nh + 4)
                         .transition(.blurScale)
-                } else if case .focus(let name, let symbol, let tint, let on) = hud {
-                    FocusFeature(name: name, symbol: symbol, tint: tint, on: on)
-                        .frame(width: size.width, height: hud.rowHeight)
-                        .offset(y: nh)
+                } else if case .timer(let id) = hud {
+                    TimerCard(model: model, id: id)
+                        .frame(width: size.width - 36, height: hud.cardHeight - 14, alignment: .center)
+                        .offset(x: 18, y: nh + 4)
+                        .transition(.blurScale)
+                } else if hud.isWing {
+                    wingPill(for: hud, width: size.width, height: nh)
                         .transition(.blurScale)
                 } else if case .card(let symbol, let title, let subtitle, let tint, _) = hud {
                     PluginCard(symbol: symbol, title: title, subtitle: subtitle, tint: tint)
@@ -181,6 +184,28 @@ struct NotchContent: View {
     }
 
     private var inlineShift: CGFloat { model.inlineHUD != nil ? NotchModel.inlineExtra : 0 }
+
+    /// Focus, lock and icon-only toasts: they live inside the notch's own height, beside the camera housing.
+    @ViewBuilder
+    private func wingPill(for hud: HUDKind, width: CGFloat, height: CGFloat) -> some View {
+        let notchWidth = model.geometry.notchWidth
+        switch hud {
+        case .focus(_, let symbol, let tint, let on):
+            WingPill(symbol: symbol, tint: Color(hex: tint) ?? .white, text: on ? L("Açık", "On") : L("Kapalı", "Off"),
+                     notchWidth: notchWidth, symbolOffEffect: !on)
+                .frame(width: width, height: height)
+        case .lock(let locked):
+            WingPill(symbol: locked ? "lock.fill" : "lock.open.fill", tint: .white, text: nil, notchWidth: notchWidth,
+                     symbolOffEffect: false)
+                .frame(width: width, height: height)
+        case .custom(let symbol, _, _, let tint):
+            WingPill(symbol: symbol, tint: tint.flatMap(Color.init(hex:)) ?? .white, text: nil, notchWidth: notchWidth,
+                     symbolOffEffect: false)
+                .frame(width: width, height: height)
+        default:
+            EmptyView()
+        }
+    }
 
     private var subtitle: String {
         guard let m = model.media else { return "" }
@@ -456,7 +481,7 @@ struct HUDRow: View {
             EmptyView()
         case .touchID:
             EmptyView()
-        case .accessory, .focus, .card:
+        case .accessory, .focus, .card, .timer, .lock:
             EmptyView()
         }
     }
@@ -476,7 +501,7 @@ struct HUDRow: View {
             EmptyView()
         case .touchID:
             EmptyView()
-        case .accessory, .focus, .card:
+        case .accessory, .focus, .card, .timer, .lock:
             EmptyView()
         case .custom(_, let text, let level, let tint):
             if let level { levelBar(level, tint: tint.flatMap(Color.init(hex:))) } else { label(text) }
@@ -954,104 +979,160 @@ struct BatteryCapsuleBody: View {
 }
 
 /// AirPods / Beats / JBL connected or disconnected: the device's own drawing, the name and the battery levels below.
+/// AirPods, Beats and the like: the model's icon, "Connected" over the name, and the battery as a ring on the right.
 struct AccessoryFeature: View {
     let name: String
     let model: AccessoryModel
     let connected: Bool
     let battery: AccessoryBattery?
 
-    var body: some View {
-        VStack(spacing: 3) {
-            Image(systemName: model.symbolName)
-                .symbolRenderingMode(.hierarchical)
-                .font(.system(size: 54, weight: .regular))
-                .foregroundStyle((model.brandTint.flatMap(Color.init(hex:)) ?? .white).opacity(connected ? 0.96 : 0.4))
-                .frame(width: 140, height: 62)
-                .animation(.easeOut(duration: 0.25), value: connected)
-            Text(name)
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(connected ? 1 : 0.7))
-                .lineLimit(1)
-            levels.frame(height: 26)
-        }
-        .padding(.top, 8)
-        .padding(.horizontal, 16)
+    private var tint: Color { model.brandTint.flatMap(Color.init(hex:)) ?? .white }
+
+    /// The ring shows the weakest earbud (or the single battery of headphones).
+    private var level: Int? {
+        guard let battery else { return nil }
+        return battery.main ?? [battery.left, battery.right].compactMap { $0 }.min() ?? battery.box
     }
 
-    @ViewBuilder
-    private var levels: some View {
-        if !connected {
-            Text(L("Bağlantı kesildi", "Disconnected"))
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.45))
-        } else if let battery, !battery.isEmpty {
-            HStack(spacing: 14) {
-                if let main = battery.main {
-                    gauge(L("Pil", "Battery"), main, width: 64)
-                }
-                if let left = battery.left { gauge("L", left) }
-                if let right = battery.right { gauge("R", right) }
-                if let box = battery.box { gauge(L("Kutu", "Case"), box) }
-            }
-            .transition(.opacity)
-        } else {
-            Text(L("Bağlandı", "Connected"))
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.55))
-        }
+    /// "Connected" first; once the levels are known the label tells the details.
+    private var detail: String {
+        guard connected else { return L("Bağlantı kesildi", "Disconnected") }
+        guard let battery else { return L("Bağlandı", "Connected") }
+        var parts: [String] = []
+        if let left = battery.left { parts.append("L \(left)") }
+        if let right = battery.right { parts.append("R \(right)") }
+        if let box = battery.box { parts.append(L("Kutu", "Case") + " \(box)") }
+        return parts.isEmpty ? L("Bağlandı", "Connected") : parts.joined(separator: " · ")
     }
-
-    private func gauge(_ label: String, _ value: Int, width: CGFloat = 34) -> some View {
-        VStack(spacing: 4) {
-            Text("\(label) \(value)%")
-                .font(.system(size: 10, weight: .medium).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.78))
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.18))
-                Capsule().fill(value <= 20 ? Color(red: 1.0, green: 0.27, blue: 0.30) : Color.white.opacity(0.92))
-                    .frame(width: max(3, width * CGFloat(value) / 100))
-            }
-            .frame(width: width, height: 3.5)
-            .animation(.easeOut(duration: 0.5), value: value)
-        }
-    }
-}
-
-/// Focus on / off: a tinted tile with the mode's symbol (struck through when off) and the mode name.
-struct FocusFeature: View {
-    let name: String
-    let symbol: String
-    let tint: String
-    let on: Bool
-    @State private var drawn = false
-
-    private var color: Color { Color(hex: tint) ?? .white }
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(on ? color.opacity(0.2) : Color.white.opacity(0.09))
-                Circle().trim(from: 0, to: drawn ? 1 : 0)
-                    .stroke(on ? color : Color.white.opacity(0.3), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(on ? color : Color.white.opacity(0.5))
-                    .symbolEffect(.bounce, value: on)
-                if !on {
-                    Capsule().fill(Color.white.opacity(0.6)).frame(width: 23, height: 1.8).rotationEffect(.degrees(-45))
-                }
-            }
-            .frame(width: 36, height: 36)
-
+            Image(systemName: model.symbolName)
+                .symbolRenderingMode(.hierarchical)
+                .font(.system(size: 30, weight: .regular))
+                .foregroundStyle(tint.opacity(connected ? 0.96 : 0.4))
+                .frame(width: 46)
             VStack(alignment: .leading, spacing: 1) {
-                Text(name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                Text(on ? L("Odak açık", "Focus on") : L("Odak kapalı", "Focus off"))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(on ? color : Color.white.opacity(0.5))
+                Text(detail)
+                    .font(.system(size: 11.5, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                Text(name)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white.opacity(connected ? 1 : 0.7))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if connected, let level {
+                BatteryRing(percent: level)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 4)
-        .onAppear { withAnimation(.easeOut(duration: 0.6)) { drawn = true } }
+        .animation(.easeOut(duration: 0.35), value: level)
+        .animation(.easeOut(duration: 0.25), value: connected)
+    }
+}
+
+/// A thin progress ring with the percentage inside, green and red when low.
+struct BatteryRing: View {
+    let percent: Int
+    var size: CGFloat = 34
+
+    private var color: Color { percent <= 20 ? Color(red: 1.0, green: 0.27, blue: 0.30) : Color(red: 0.30, green: 0.85, blue: 0.45) }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(color.opacity(0.22), lineWidth: 3)
+            Circle().trim(from: 0, to: CGFloat(min(max(percent, 0), 100)) / 100)
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Text("\(percent)").font(.system(size: 12, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
+        }
+        .frame(width: size, height: size)
+        .animation(.easeOut(duration: 0.5), value: percent)
+    }
+}
+
+/// A light event in the notch's own height: an icon in the left wing and, optionally, a word in the right one.
+struct WingPill: View {
+    let symbol: String
+    let tint: Color
+    let text: String?
+    let notchWidth: CGFloat
+    /// Strikes the icon through, for "off" states.
+    let symbolOffEffect: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ZStack {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(symbolOffEffect ? Color.white.opacity(0.6) : tint)
+                    .contentTransition(.symbolEffect(.replace))
+                if symbolOffEffect {
+                    Capsule().fill(Color.white.opacity(0.6)).frame(width: 19, height: 1.8).rotationEffect(.degrees(-45))
+                }
+            }
+            .frame(width: 22)
+            Spacer(minLength: notchWidth)   // stays clear of the camera housing
+            if let text {
+                Text(text)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(symbolOffEffect ? Color.white.opacity(0.6) : tint)
+                    .lineLimit(1)
+                    .frame(minWidth: 22, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal, 13)
+    }
+}
+
+/// A running timer: pause and cancel on the left, the label and the time left in large type on the right.
+struct TimerCard: View {
+    @ObservedObject var model: NotchModel
+    let id: String
+
+    private static let orange = Color(red: 1.0, green: 0.62, blue: 0.04)
+
+    var body: some View {
+        let activity = model.activities.first { $0.id == id }
+        let tint = activity?.tint.flatMap(Color.init(hex:)) ?? Self.orange
+        let paused = activity?.isPaused == true
+        HStack(spacing: 8) {
+            roundButton(paused ? "play.fill" : "pause.fill", fill: tint.opacity(0.28), foreground: tint) { model.toggleTimerPause(id: id) }
+            roundButton("xmark", fill: Color.white.opacity(0.16), foreground: .white) { model.cancelTimer(id: id) }
+            Spacer(minLength: 6)
+            HStack(alignment: .lastTextBaseline, spacing: 7) {
+                Text(label(activity)).font(.system(size: 12, weight: .medium)).foregroundStyle(tint.opacity(0.9)).lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 0.25)) { ctx in
+                    let left = activity?.remaining(at: ViewClock.date(ctx.date)).rounded(.up) ?? 0
+                    Text(String(format: "%02d:%02d", Int(left) / 60, Int(left) % 60))
+                        .font(.system(size: 31, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(tint)
+                        .opacity(paused ? 0.6 : 1)
+                }
+            }
+        }
+    }
+
+    private func label(_ activity: Activity?) -> String {
+        let text = activity?.text ?? ""
+        return text.isEmpty ? L("Zamanlayıcı", "Timer") : text
+    }
+
+    private func roundButton(_ symbol: String, fill: Color, foreground: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(foreground)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(fill))
+                .contentShape(Circle())
+        }
+        .buttonStyle(PressStyle())
     }
 }
 

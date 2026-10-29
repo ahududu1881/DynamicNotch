@@ -82,6 +82,7 @@ notch.off("media", handler)
 | `accessory` | `name`, `connected`, `model` (AirPods, Beats, JBL...) |
 | `recording` | `active`, `seconds` (when it ends) |
 | `touchid` | `phase`: `waiting`, `success`, `cancelled` |
+| `lock` | `locked`: `true` when the Mac locks, `false` when it unlocks |
 | `timer` | `id`, `label`: when a timer set by the plugin finishes |
 | `notification` | `app`, `bundleId`, `title`, `subtitle`, `body` (**needs the `notifications` permission**) |
 

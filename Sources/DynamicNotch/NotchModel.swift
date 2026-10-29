@@ -27,6 +27,8 @@ final class NotchModel: ObservableObject {
     /// The Touch ID animation needs room below the notch.
     static let touchIDHeight: CGFloat = 76
     static let notificationHeight: CGFloat = 78
+    /// Each wing of a light event (Focus, lock...) beside the camera housing.
+    static let wingPillWidth: CGFloat = 50
     static let maxActivities = 8
     static let maxQueuedHUDs = 12
 
@@ -149,7 +151,7 @@ final class NotchModel: ObservableObject {
 
     /// Light feedback (volume, focus...) while the pill is on screen keeps the pill and grows a row below it.
     var hudOverLive: Bool {
-        guard let hud, !hud.isCard, !hud.isTouchID else { return false }
+        guard let hud, !hud.isCard, !hud.isTouchID, !hud.isWing else { return false }
         return pillShowsMedia || pillActivity != nil
     }
 
@@ -178,8 +180,9 @@ final class NotchModel: ObservableObject {
             if inlineHUD != nil { h += Self.inlineExtra }
             return CGSize(width: Self.expandedWidth, height: h)
         case .hud(let kind):
-            if kind.isCard { return CGSize(width: Self.notificationWidth, height: nh + kind.cardHeight) }
+            if kind.isCard { return CGSize(width: kind.cardWidth, height: nh + kind.cardHeight) }
             if kind.isTouchID { return CGSize(width: nw, height: nh + Self.touchIDHeight) }
+            if kind.isWing { return CGSize(width: nw + 2 * Self.wingPillWidth, height: nh) }
             return CGSize(width: hudOverLive ? nw + 2 * wing : nw, height: nh + kind.rowHeight)
         }
     }
@@ -188,7 +191,7 @@ final class NotchModel: ObservableObject {
         switch presentation {
         case .idle: return idleBulge ? 4 : 0
         case .live: return 6
-        case .hud(let kind): return kind.isCard ? 8 : (hudOverLive ? 6 : 0)
+        case .hud(let kind): return kind.isCard ? 8 : (kind.isWing || hudOverLive ? 6 : 0)
         case .expanded: return 12
         }
     }
@@ -260,7 +263,9 @@ final class NotchModel: ObservableObject {
     func primaryClick() {
         switch presentation {
         case .idle, .live:
-            if media != nil { expand() } else { bounce() }
+            if media != nil { expand() }
+            else if let timer = pillActivity, timer.isTimer { showTimerCard(id: timer.id) }
+            else { bounce() }
         case .hud(let kind):
             // Tapping a notification opens its app.
             if case .notification(let bundleID, _, _, _) = kind {
@@ -417,6 +422,44 @@ final class NotchModel: ObservableObject {
         }
         if previous?.text != activity.text, pillActivity?.id == activity.id { flashStrip() }
         startActivityTicker()
+        // A new timer announces itself with its card.
+        if previous == nil, activity.isTimer { showTimerCard(id: activity.id) }
+    }
+
+    // MARK: Timers
+
+    func toggleTimerPause(id: String) {
+        guard let index = activities.firstIndex(where: { $0.id == id }), activities[index].isTimer else { return }
+        var activity = activities[index]
+        let now = Date()
+        if let left = activity.pausedRemaining {
+            activity.endDate = now.addingTimeInterval(left)
+            activity.pausedRemaining = nil
+            activity.expires = max(activity.expires, now.addingTimeInterval(left + 60))
+        } else {
+            let left = activity.remaining(at: now)
+            activity.pausedRemaining = left
+            // A paused timer must not be swept away by the safety net.
+            activity.expires = now.addingTimeInterval(left + 86_400)
+        }
+        withAnimation(.notch) { activities[index] = activity }
+        extendTimerCard()
+    }
+
+    func cancelTimer(id: String) {
+        endActivity(id: id)
+        dismissHUD(channel: "timer-card")
+    }
+
+    /// Opens the timer's card (on start, and when its pill is clicked).
+    func showTimerCard(id: String) {
+        guard activities.contains(where: { $0.id == id && $0.isTimer }) else { return }
+        showHUD(.timer(id: id), duration: 6)
+    }
+
+    /// Pressing a button keeps the card up a little longer.
+    private func extendTimerCard() {
+        if case .hud(.timer(let id)) = presentation { showHUD(.timer(id: id), duration: 5) }
     }
 
     @discardableResult
@@ -437,8 +480,8 @@ final class NotchModel: ObservableObject {
         }
     }
 
-    func expireActivities(now: Date = Date()) {
-        let done = activities.filter { $0.expires <= now || ($0.endDate.map { $0 <= now } ?? false) }
+    func expireActivities(now: Date = ViewClock.date(Date())) {
+        let done = activities.filter { $0.expires <= now || ($0.pausedRemaining == nil && ($0.endDate.map { $0 <= now } ?? false)) }
         guard !done.isEmpty else { return }
         withAnimation(.notch) { activities.removeAll { a in done.contains { $0.id == a.id } } }
         for activity in done where activity.isTimer && (activity.endDate ?? .distantFuture) <= now {
